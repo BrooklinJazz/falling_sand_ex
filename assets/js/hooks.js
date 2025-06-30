@@ -1,0 +1,71 @@
+let Hooks = {}
+
+Hooks.PixelCanvas = {
+    mounted() {
+        this.canvas = this.el
+        this.ctx = this.canvas.getContext("2d")
+        this.cellSize = this.el.getAttribute("cellSize")
+        // Listen for updates from server
+        this.handleEvent("render_grid", ({ grid }) => {
+            this.render(grid)
+        })
+
+        this.canvas.addEventListener("click", (event) => {
+            const { x, y } = this.getCanvasCoords(event)
+            this.pushEvent("click_pixel", { x, y })
+        })
+
+        // Mouse down
+        this.canvas.addEventListener("mousedown", (event) => {
+            this.isDrawing = true
+            const { x, y } = this.getCanvasCoords(event)
+            this.pushEvent("mousedown", { x, y })
+        })
+
+        // Mouse up
+        this.canvas.addEventListener("mouseup", (event) => {
+            this.isDrawing = false
+            this.pushEvent("mouseup", {})
+        })
+
+        // Mouse move (only when dragging)
+        this.canvas.addEventListener("mousemove", (event) => {
+            if (this.isDrawing) {
+                const { x, y } = this.getCanvasCoords(event)
+                if (this.x != x || this.y != y) {
+                    this.pushEvent("mousemove", { x, y })
+                }
+            }
+        })
+    },
+
+
+    getCanvasCoords(event) {
+        const rect = this.canvas.getBoundingClientRect()
+        const scaleX = this.canvas.width / rect.width
+        const scaleY = this.canvas.height / rect.height
+
+        const pixelX = (event.clientX - rect.left) * scaleX
+        const pixelY = (event.clientY - rect.top) * scaleY
+
+        const x = Math.floor(pixelX / this.cellSize)
+        const y = Math.floor(pixelY / this.cellSize)
+
+        return { x, y }
+    },
+
+    render(grid) {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
+
+        grid.forEach((row, y) => {
+            row.forEach((cell, x) => {
+                if (cell) {
+                    this.ctx.fillStyle = cell == "sand" ? "black" : "white"
+                    this.ctx.fillRect(x * this.cellSize, y * this.cellSize, this.cellSize, this.cellSize)
+                }
+            })
+        })
+    }
+}
+
+export default Hooks
