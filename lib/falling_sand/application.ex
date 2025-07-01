@@ -15,6 +15,7 @@ defmodule FallingSand.Application do
       {Finch, name: FallingSand.Finch},
       # Start a worker by calling: FallingSand.Worker.start_link(arg)
       # {FallingSand.Worker, arg},
+      {FallingSand.GridServer, []},
       # Start to serve requests, typically the last entry
       FallingSandWeb.Endpoint
     ]

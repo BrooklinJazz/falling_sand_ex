@@ -29,7 +29,7 @@ defmodule FallingSand.Grid do
     end)
   end
 
-  def new(name \\ @table_name, _width, _height) do
+  def new(name \\ @table_name) do
     case :ets.whereis(name) do
       :undefined ->
         :ets.new(name, [:named_table, :public, :set])
