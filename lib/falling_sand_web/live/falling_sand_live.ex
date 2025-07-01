@@ -1,22 +1,32 @@
-defmodule FallingSandWeb.FallingSandLive do
+defmodule FallingSandWeb.FallingSandLive.ETS do
   alias FallingSand.Grid
   use FallingSandWeb, :live_view
+  @framerate 15
 
   def mount(_params, _session, socket) do
     height = 100
     width = 100
-    grid = Grid.empty(width, height)
-    cell_size = 6
-
-    socket = push_event(socket, "render_grid", %{grid: grid})
+    cell_size = 5
 
     if connected?(socket) do
       Process.send(self(), :tick, [])
     end
 
+    Grid.new(width, height)
+
+    for x <- 0..(width - 1) do
+      Grid.set({x, height - 1}, :stone)
+    end
+
+    for y <- 0..(width - 1) do
+      Grid.set({0, y}, :stone)
+      Grid.set({width - 1, y}, :stone)
+    end
+
+    socket = push_event(socket, "render_grid", %{active_cells: Grid.active_cells()})
+
     {:ok,
      assign(socket,
-       grid: grid,
        height: height * cell_size,
        width: width * cell_size,
        cell_size: cell_size,
@@ -41,20 +51,17 @@ defmodule FallingSandWeb.FallingSandLive do
   end
 
   def handle_event("tick", _params, socket) do
-    updated_grid = Grid.tick(socket.assigns.grid)
+    Grid.tick()
 
-    socket =
-      push_event(socket, "render_grid", %{grid: updated_grid}) |> assign(grid: updated_grid)
+    socket = push_event(socket, "render_grid", %{active_cells: Grid.active_cells()})
 
     {:noreply, socket}
   end
 
   def handle_event("click_pixel", %{"x" => x, "y" => y}, socket) do
-    # Update simulation: place sand, stone, etc.
-    updated_grid = Grid.set(socket.assigns.grid, x, y, :sand)
+    Grid.set({x, y}, :sand)
 
-    socket =
-      push_event(socket, "render_grid", %{grid: updated_grid}) |> assign(grid: updated_grid)
+    socket = push_event(socket, "render_grid", %{active_cells: Grid.active_cells()})
 
     {:noreply, socket}
   end
@@ -72,19 +79,15 @@ defmodule FallingSandWeb.FallingSandLive do
   end
 
   def handle_info(:tick, socket) do
-    updated_grid =
-      if socket.assigns.is_drawing do
-        Grid.set(socket.assigns.grid, socket.assigns.cursor_x, socket.assigns.cursor_y, :sand)
-      else
-        socket.assigns.grid
-      end
+    if socket.assigns.is_drawing do
+      Grid.set({socket.assigns.cursor_x, socket.assigns.cursor_y}, :sand)
+    end
 
-    updated_grid = Grid.tick(updated_grid)
+    Grid.tick()
 
-    socket =
-      push_event(socket, "render_grid", %{grid: updated_grid}) |> assign(grid: updated_grid)
+    socket = push_event(socket, "render_grid", %{active_cells: Grid.active_cells()})
 
-    Process.send_after(self(), :tick, 10)
+    Process.send_after(self(), :tick, @framerate)
     {:noreply, socket}
   end
 end

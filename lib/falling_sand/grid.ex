@@ -1,88 +1,62 @@
 defmodule FallingSand.Grid do
-  def tick(grid) do
-    height = length(grid)
-    width = length(hd(grid))
-    empty_grid = for _ <- 1..height, do: for(_ <- 1..width, do: 0)
+  @table_name :grid
+  @default_value :empty
+  defguard is_element(element) when element in [:sand, :stone]
 
-    Enum.reduce((height - 1)..0//-1, empty_grid, fn y, new_grid ->
-      Enum.reduce(0..(width - 1), new_grid, fn x, new_grid ->
-        cell = get(grid, x, y)
-
-        cond do
-          cell == :sand and get(grid, x, y + 1) == :empty ->
-            new_grid
-            |> set(x, y + 1, :sand)
-            |> set(x, y, :empty)
-
-          cell == :sand and get(grid, x + 1, y + 1) == :empty and get(grid, x + 1, y) == :empty ->
-            new_grid
-            |> set(x + 1, y + 1, :sand)
-            |> set(x, y, :empty)
-
-          cell == :sand and get(grid, x - 1, y + 1) == :empty and get(grid, x - 1, y) == :empty ->
-            new_grid
-            |> set(x - 1, y + 1, :sand)
-            |> set(x, y, :empty)
-
-          true ->
-            set(new_grid, x, y, cell)
-        end
-      end)
-    end)
+  def active_cells(table \\ @table_name) do
+    :ets.tab2list(table) |> Enum.map(fn {{x, y}, cell} -> %{x: x, y: y, cell: cell} end)
   end
 
-  def new(grid) do
-    if Enum.all?(List.flatten(grid), fn element -> element in [:sand, :empty] end) do
-      grid
-    else
-      raise "Attempted to create grid with invalid data."
-    end
-  end
+  def tick(table \\ @table_name) do
+    :ets.tab2list(table)
+    |> Enum.each(fn {{x, y}, cell} ->
+      cond do
+        cell == :sand and get(table, {x, y + 1}) == :empty ->
+          set(table, {x, y + 1}, :sand)
+          set(table, {x, y}, :empty)
 
-  def empty(width, height) do
-    for _y <- 0..(height - 1) do
-      for _x <- 0..(width - 1) do
-        :empty
+        cell == :sand and get(table, {x + 1, y + 1}) == :empty ->
+          set(table, {x + 1, y + 1}, :sand)
+          set(table, {x, y}, :empty)
+
+        cell == :sand and get(table, {x - 1, y + 1}) == :empty ->
+          set(table, {x - 1, y + 1}, :sand)
+          set(table, {x, y}, :empty)
+
+        true ->
+          nil
       end
-    end
-  end
-
-  def get(grid, x, y) do
-    if in_bounds?(grid, x, y) do
-      grid |> Enum.at(y) |> Enum.at(x)
-    else
-      :oob
-    end
-  end
-
-  def in_bounds?([first_row | _] = grid, x, y) when is_list(first_row) do
-    x >= 0 and y >= 0 and y < length(grid) and x < length(first_row)
-  end
-
-  def set(grid, x, y, value) when is_atom(value) do
-    List.update_at(grid, y, fn row ->
-      List.update_at(row, x, fn _ -> value end)
     end)
   end
 
-  def pretty_print(grid) do
-    IO.puts("==============")
-    IO.puts("[")
+  def new(name \\ @table_name, _width, _height) do
+    case :ets.whereis(name) do
+      :undefined ->
+        :ets.new(name, [:named_table, :public, :set])
 
-    Enum.each(grid, fn row ->
-      IO.inspect(row)
-    end)
-
-    IO.puts("]")
-
-    IO.puts("==============")
+      tid when is_reference(tid) ->
+        tid
+    end
   end
 
-  def random(width, height) do
-    for _y <- 0..(height - 1) do
-      for _x <- 0..(width - 1) do
-        Enum.random([:sand, :empty])
-      end
+  def get(table \\ @table_name, {x, y} = _coordinate) do
+    case :ets.lookup(table, {x, y}) do
+      [{{^x, ^y}, value}] ->
+        value
+
+      _ ->
+        @default_value
     end
+  end
+
+  @spec set(atom() | :ets.tid(), {integer(), integer()}, atom()) :: true
+  def set(table \\ @table_name, coordinate, element)
+
+  def set(table, {x, y}, element) when is_element(element) do
+    :ets.insert(table, {{x, y}, element})
+  end
+
+  def set(table, {x, y}, :empty) do
+    :ets.delete(table, {x, y})
   end
 end

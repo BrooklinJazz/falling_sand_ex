@@ -6,8 +6,8 @@ Hooks.PixelCanvas = {
         this.ctx = this.canvas.getContext("2d")
         this.cellSize = this.el.getAttribute("cellSize")
         // Listen for updates from server
-        this.handleEvent("render_grid", ({ grid }) => {
-            this.render(grid)
+        this.handleEvent("render_grid", ({ active_cells }) => {
+            this.render(active_cells)
         })
 
         this.canvas.addEventListener("click", (event) => {
@@ -54,16 +54,11 @@ Hooks.PixelCanvas = {
         return { x, y }
     },
 
-    render(grid) {
+    render(active_cells) {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
-
-        grid.forEach((row, y) => {
-            row.forEach((cell, x) => {
-                if (cell) {
-                    this.ctx.fillStyle = cell == "sand" ? "black" : "white"
-                    this.ctx.fillRect(x * this.cellSize, y * this.cellSize, this.cellSize, this.cellSize)
-                }
-            })
+        active_cells.forEach(({ x, y, cell }) => {
+            this.ctx.fillStyle = "black"
+            this.ctx.fillRect(x * this.cellSize, y * this.cellSize, this.cellSize, this.cellSize)
         })
     }
 }

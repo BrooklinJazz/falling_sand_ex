@@ -17,7 +17,9 @@ defmodule FallingSandWeb.Router do
   scope "/", FallingSandWeb do
     pipe_through :browser
 
-    live "/", FallingSandLive
+    live "/", FallingSandLive.ETS
+    live "/ets", FallingSandLive.ETS
+    live "/list", FallingSandLive.List
   end
 
   # Other scopes may use custom stacks.
