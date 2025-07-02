@@ -1,4 +1,4 @@
-defmodule FallingSandWeb.FallingSandLive.ETS do
+defmodule FallingSandWeb.FallingSandLive do
   alias FallingSand.GridServer
   alias FallingSand.Grid
   use FallingSandWeb, :live_view
@@ -13,7 +13,7 @@ defmodule FallingSandWeb.FallingSandLive.ETS do
       Phoenix.PubSub.subscribe(FallingSand.PubSub, "grid")
     end
 
-    socket = push_event(socket, "render_grid", %{active_cells: Grid.active_cells()})
+    socket = push_event(socket, "render_grid", %{all_cells: GridServer.all_cells()})
 
     {:ok,
      assign(socket,
@@ -62,7 +62,8 @@ defmodule FallingSandWeb.FallingSandLive.ETS do
     {:noreply, assign(socket, cursor_x: x, cursor_y: y)}
   end
 
-  def handle_info({:diffs, active_cells}, socket) do
-    {:noreply, push_event(socket, "render_grid", %{active_cells: active_cells})}
+  # This sends all cells, not just diffs for now
+  def handle_info({:diffs, all_cells}, socket) do
+    {:noreply, push_event(socket, "render_grid", %{all_cells: all_cells})}
   end
 end

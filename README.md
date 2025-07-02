@@ -27,3 +27,17 @@ Ready to run in production? Please [check our deployment guides](https://hexdocs
 | **Steam** | Rises quickly, condenses into water when cooled |
 | **Fire**  | Spreads to flammable materials, burns out       |
 
+## Dev Notes
+
+* Make GridServer only manage specific coordinates
+* Only broadcast diffs
+* Limit active cells to only those likely to change.
+* Store all cells vs active cells in different places?
+* Users can drag the screen to move their page coordinate
+* Users subscribe to broadcasted events only for their page coordinates?
+* Scale with a dns cluster?
+
+* ChunkServer
+  * ActiveCells
+  * tick -> broadcast diffs only to the chunk coords
+  * 

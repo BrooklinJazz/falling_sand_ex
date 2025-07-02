@@ -7,18 +7,18 @@ defmodule FallingSand.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [
-      FallingSandWeb.Telemetry,
-      {DNSCluster, query: Application.get_env(:falling_sand, :dns_cluster_query) || :ignore},
-      {Phoenix.PubSub, name: FallingSand.PubSub},
-      # Start the Finch HTTP client for sending emails
-      {Finch, name: FallingSand.Finch},
-      # Start a worker by calling: FallingSand.Worker.start_link(arg)
-      # {FallingSand.Worker, arg},
-      {FallingSand.GridServer, []},
-      # Start to serve requests, typically the last entry
-      FallingSandWeb.Endpoint
-    ]
+    children =
+      [
+        FallingSandWeb.Telemetry,
+        {DNSCluster, query: Application.get_env(:falling_sand, :dns_cluster_query) || :ignore},
+        {Phoenix.PubSub, name: FallingSand.PubSub},
+        # Start the Finch HTTP client for sending emails
+        {Finch, name: FallingSand.Finch},
+        # Start a worker by calling: FallingSand.Worker.start_link(arg)
+        # {FallingSand.Worker, arg},
+        # Start to serve requests, typically the last entry
+        FallingSandWeb.Endpoint
+      ] ++ if Mix.env() == :test, do: [], else: [{FallingSand.GridServer, []}]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
