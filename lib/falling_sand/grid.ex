@@ -91,6 +91,112 @@ defmodule FallingSand.Grid do
     end
   end
 
+  # Note: I'm worried because ETS won't guaranteed order of coords we'll have issues.
+  defmodule ETSDiffs do
+    @behaviour FallingSand.Grid
+    @default_value :empty
+
+    defguard is_element(element) when element in [:sand, :stone]
+
+    def new(name \\ nil) do
+      name = name || String.to_atom(UUID.uuid1())
+
+      :ets.new(all_cells_table(name), [
+        :named_table,
+        :public,
+        :set,
+        {:read_concurrency, true}
+      ])
+
+      :ets.new(active_cells_table(name), [:named_table, :public, :set])
+      :ets.new(diff_cells_since_last_tick_table(name), [:named_table, :public, :set])
+      name
+    end
+
+    def all_cells(name) do
+      :ets.tab2list(all_cells_table(name))
+      |> Enum.map(fn {{x, y}, element} -> %{y: y, x: x, element: element} end)
+    end
+
+    def tick(name) do
+      :ets.tab2list(active_cells_table(name))
+      |> Enum.each(fn {{x, y} = coord, element} ->
+        down_left = {x - 1, y + 1}
+        down_right = {x + 1, y + 1}
+        down = {x, y + 1}
+
+        cond do
+          element == :sand and get(name, down) == :empty ->
+            set(name, down, :sand)
+            set(name, coord, :empty)
+
+          element == :sand and get(name, down_right) == :empty ->
+            set(name, down_right, :sand)
+            set(name, coord, :empty)
+
+          element == :sand and get(name, down_left) == :empty ->
+            set(name, down_left, :sand)
+            set(name, coord, :empty)
+
+          # all cells below are filled and inactive
+          # this might need to change if some cells allow cells through them like water?
+          not :ets.member(active_cells_table(name), down_left) and
+            not :ets.member(active_cells_table(name), down) and
+              not :ets.member(active_cells_table(name), down_right) ->
+            :ets.delete(active_cells_table(name), coord)
+
+          true ->
+            nil
+        end
+      end)
+
+      diff = :ets.tab2list(diff_cells_since_last_tick_table(name))
+      :ets.delete_all_objects(diff_cells_since_last_tick_table(name))
+      diff
+    end
+
+    def get(name \\ __MODULE__, coord) do
+      case :ets.lookup(all_cells_table(name), coord) do
+        [{_, value}] ->
+          value
+
+        _ ->
+          @default_value
+      end
+    end
+
+    # I might want to do a single source of truth in the all_cells_table
+    def set(name \\ __MODULE__, coord, element)
+
+    def set(name, coord, :empty) do
+      with true <- :ets.delete(all_cells_table(name), coord),
+           true <- :ets.delete(active_cells_table(name), coord),
+           true <- :ets.insert(diff_cells_since_last_tick_table(name), {coord, :empty}) do
+        name
+      end
+    end
+
+    def set(name, coord, element) do
+      with true <- :ets.insert(all_cells_table(name), {coord, element}),
+           true <- :ets.insert(active_cells_table(name), {coord, element}),
+           true <- :ets.insert(diff_cells_since_last_tick_table(name), {coord, element}) do
+        name
+      end
+    end
+
+    defp all_cells_table(name) do
+      String.to_atom("all_cells_#{name}")
+    end
+
+    defp active_cells_table(name) do
+      String.to_atom("active_cells_#{name}")
+    end
+
+    defp diff_cells_since_last_tick_table(name) do
+      String.to_atom("diff_cells_#{name}")
+    end
+  end
+
   defmodule Maps do
     @behaviour FallingSand.Grid
 
