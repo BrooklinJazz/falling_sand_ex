@@ -1,7 +1,6 @@
 defmodule FallingSand.GridTest do
   use ExUnit.Case
-  alias FallingSand.Grid.ETS
-  alias FallingSand.Grid.Optimized
+  alias FallingSand.Grid.WithActiveTracking, as: Optimized
   alias FallingSand.Grid
 
   test "all_cells/1" do
