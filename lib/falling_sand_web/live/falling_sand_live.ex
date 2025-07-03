@@ -1,19 +1,19 @@
 defmodule FallingSandWeb.FallingSandLive do
   alias FallingSand.GridServer
-  alias FallingSand.Grid
   use FallingSandWeb, :live_view
+  @size 500
 
   def mount(_params, _session, socket) do
-    height = 100
-    width = 100
-    cell_size = 5
+    height = @size
+    width = @size
+    cell_size = 1
     page_id = UUID.uuid1()
 
     if connected?(socket) do
       Phoenix.PubSub.subscribe(FallingSand.PubSub, "grid")
     end
 
-    socket = push_event(socket, "render_grid", %{all_cells: GridServer.all_cells()})
+    socket = push_event(socket, "render_grid", %{diffs: GridServer.all_cells()})
 
     {:ok,
      assign(socket,
@@ -42,7 +42,7 @@ defmodule FallingSandWeb.FallingSandLive do
     """
   end
 
-  def handle_event("click_pixel", %{"x" => x, "y" => y}, socket) do
+  def handle_event("click_pixel", %{"x" => _x, "y" => _y}, socket) do
     {:noreply, socket}
   end
 
@@ -53,17 +53,26 @@ defmodule FallingSandWeb.FallingSandLive do
 
   def handle_event("mousedown", %{"x" => x, "y" => y}, socket) do
     # It's a bit hacky calling GenServer directly here
-    GenServer.cast(GridServer, {:mousedown, %{x: x, y: y, page_id: socket.assigns.page_id}})
+    # HARD CODING SAND FOR NOW
+    GenServer.cast(
+      GridServer,
+      {:mousedown, %{x: x, y: y, page_id: socket.assigns.page_id, element: :sand}}
+    )
+
     {:noreply, assign(socket, cursor_x: x, cursor_y: y, is_drawing: true)}
   end
 
   def handle_event("mousemove", %{"x" => x, "y" => y}, socket) do
-    GenServer.cast(GridServer, {:mousemove, %{x: x, y: y, page_id: socket.assigns.page_id}})
+    GenServer.cast(
+      GridServer,
+      {:mousemove, %{x: x, y: y, page_id: socket.assigns.page_id, element: :sand}}
+    )
+
     {:noreply, assign(socket, cursor_x: x, cursor_y: y)}
   end
 
   # This sends all cells, not just diffs for now
-  def handle_info({:diffs, all_cells}, socket) do
-    {:noreply, push_event(socket, "render_grid", %{all_cells: all_cells})}
+  def handle_info({:diffs, diffs}, socket) do
+    {:noreply, push_event(socket, "render_grid", %{diffs: diffs})}
   end
 end

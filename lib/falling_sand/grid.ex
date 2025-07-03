@@ -2,58 +2,60 @@ defmodule FallingSand.Grid do
   @type element :: :sand | :stone | :empty
   @type cell :: %{x: integer(), y: integer(), element: element()}
   @type coord :: {x :: integer(), y :: integer()}
-  @callback active_cells(any()) :: list(cell())
   @callback all_cells(any()) :: list(cell())
   @callback get(any(), coord()) :: cell()
   @callback new :: any()
   @callback set(any(), {integer(), integer()}, value :: element()) :: any()
   @callback tick(any()) :: any()
 
-  defdelegate active_cells(grid),
-    to: Application.compile_env(:falling_sand, :grid, FallingSand.Grid.ETS)
+  @spec impl() :: any()
+  def impl() do
+    Application.get_env(:falling_sand, :grid, FallingSand.Grid.Optimized)
+  end
 
-  defdelegate all_cells(grid),
-    to: Application.compile_env(:falling_sand, :grid, FallingSand.Grid.ETS)
+  def all_cells(grid), do: impl().all_cells(grid)
+  def bulk_insert(grid, cells), do: impl().bulk_insert(grid, cells)
 
-  defdelegate get(grid, coordinates),
-    to: Application.compile_env(:falling_sand, :grid, FallingSand.Grid.ETS)
+  def get(grid, coordinates), do: impl().get(grid, coordinates)
 
-  defdelegate new, to: Application.compile_env(:falling_sand, :grid, FallingSand.Grid.ETS)
+  def new, do: impl().new()
 
-  defdelegate set(grid, coordinates, value),
-    to: Application.compile_env(:falling_sand, :grid, FallingSand.Grid.ETS)
-
-  defdelegate tick(grid), to: Application.compile_env(:falling_sand, :grid, FallingSand.Grid.ETS)
+  def set(grid, coordinates, value), do: impl().set(grid, coordinates, value)
+  def tick(grid), do: impl().tick(grid)
 
   defmodule ETS do
     @behaviour FallingSand.Grid
-    @default_value :empty
-    defguard is_element(element) when element in [:sand, :stone]
-
-    def active_cells(table) do
-      raise "Not yet implemented"
-    end
+    @type element() :: :sand | :stone | :empty
+    @type cell() :: {element(), boolean()}
+    @type coord() :: {integer(), integer()}
 
     def all_cells(table) do
       :ets.tab2list(table)
-      |> Enum.map(fn {{x, y}, element} -> %{x: x, y: y, element: element} end)
+      |> Enum.map(fn {{x, y}, {element, _}} -> %{y: y, x: x, element: element} end)
     end
 
     def tick(table) do
-      :ets.tab2list(table)
-      |> Enum.each(fn {{x, y}, element} ->
+      :ets.select(table, [{{:"$1", {:_, true}}, [], [:"$_"]}])
+      |> Enum.each(fn {{x, y} = coord, {element, _is_active}} ->
+        {down, down_active} = get_cell(table, {x, y + 1})
+        {down_right, down_right_active} = get_cell(table, {x + 1, y + 1})
+        {down_left, down_left_active} = get_cell(table, {x - 1, y + 1})
+
         cond do
-          element == :sand and get(table, {x, y + 1}) == :empty ->
+          element == :sand and down == :empty ->
             set(table, {x, y + 1}, :sand)
-            set(table, {x, y}, :empty)
+            delete(table, coord)
 
-          element == :sand and get(table, {x + 1, y + 1}) == :empty ->
+          element == :sand and down_right == :empty ->
             set(table, {x + 1, y + 1}, :sand)
-            set(table, {x, y}, :empty)
+            delete(table, coord)
 
-          element == :sand and get(table, {x - 1, y + 1}) == :empty ->
+          element == :sand and down_left == :empty ->
             set(table, {x - 1, y + 1}, :sand)
-            set(table, {x, y}, :empty)
+            delete(table, coord)
+
+          not down_left_active and not down_active and not down_right_active ->
+            set_inactive(table, coord, :sand)
 
           true ->
             nil
@@ -67,205 +69,134 @@ defmodule FallingSand.Grid do
       :ets.new(:grid, [:public, :set])
     end
 
-    def get(table, {x, y} = _coordinate) do
-      case :ets.lookup(table, {x, y}) do
-        [{{^x, ^y}, value}] ->
-          value
+    @spec get(atom() | :ets.tid(), coord()) :: element()
+    def get(table, coord) do
+      case :ets.lookup(table, coord) do
+        [{_coord, {element, _active}}] ->
+          element
 
         _ ->
-          @default_value
+          :empty
       end
     end
 
-    @spec set(atom() | :ets.tid(), {integer(), integer()}, atom()) :: true
-    def set(table, coordinate, element)
+    @spec get_cell(atom() | :ets.tid(), coord()) :: cell()
+    def get_cell(table, coord) do
+      case :ets.lookup(table, coord) do
+        [{_coord, cell}] ->
+          cell
 
-    def set(table, {x, y}, element) when is_element(element) do
-      :ets.insert(table, {{x, y}, element})
-      table
+        _ ->
+          {:empty, false}
+      end
     end
 
-    def set(table, {x, y}, :empty) do
+    def delete(table, {x, y}) do
       :ets.delete(table, {x, y})
-      table
+    end
+
+    def set(table, coord, :stone) do
+      :ets.insert(table, {coord, {:stone, false}})
+    end
+
+    def set(table, coord, :empty) do
+      delete(table, coord)
+    end
+
+    def set(table, {x, y}, element) do
+      :ets.insert(table, {{x, y}, {element, true}})
+    end
+
+    def set_inactive(table, coord, element) do
+      :ets.insert(table, {coord, {element, false}})
     end
   end
 
-  # Note: I'm worried because ETS won't guaranteed order of coords we'll have issues.
-  defmodule ETSDiffs do
+  defmodule Optimized do
     @behaviour FallingSand.Grid
-    @default_value :empty
+    @type element() :: :sand | :stone | :empty
+    @type cell() :: {element(), boolean()}
+    @type grid() :: {all :: :ets.tid(), active :: :ets.tid()}
+    @type coord() :: {integer(), integer()}
 
-    defguard is_element(element) when element in [:sand, :stone]
-
-    def new(name \\ nil) do
-      name = name || String.to_atom(UUID.uuid1())
-
-      :ets.new(all_cells_table(name), [
-        :named_table,
-        :public,
-        :set,
-        {:read_concurrency, true}
-      ])
-
-      :ets.new(active_cells_table(name), [:named_table, :public, :set])
-      :ets.new(diff_cells_since_last_tick_table(name), [:named_table, :public, :set])
-      name
-    end
-
-    def all_cells(name) do
-      :ets.tab2list(all_cells_table(name))
+    def all_cells({all_ref, active_ref}) do
+      :ets.tab2list(all_ref)
       |> Enum.map(fn {{x, y}, element} -> %{y: y, x: x, element: element} end)
     end
 
-    def tick(name) do
-      :ets.tab2list(active_cells_table(name))
-      |> Enum.each(fn {{x, y} = coord, element} ->
-        down_left = {x - 1, y + 1}
-        down_right = {x + 1, y + 1}
-        down = {x, y + 1}
+    def tick({all_ref, active_ref}) do
+      diffs =
+        :ets.tab2list(active_ref)
+        |> Enum.reduce([], fn {{x, y} = coord, _}, acc ->
+          element = :ets.lookup_element(all_ref, coord, 2)
+          down = {x, y + 1}
+          down_right = {x + 1, y + 1}
+          down_left = {x - 1, y + 1}
 
-        cond do
-          element == :sand and get(name, down) == :empty ->
-            set(name, down, :sand)
-            set(name, coord, :empty)
+          cond do
+            element == :sand and not :ets.member(all_ref, down) ->
+              :ets.delete(all_ref, coord)
+              [{down, :sand} | [{coord, :empty} | acc]]
 
-          element == :sand and get(name, down_right) == :empty ->
-            set(name, down_right, :sand)
-            set(name, coord, :empty)
+            element == :sand and not :ets.member(all_ref, down_right) ->
+              :ets.delete(all_ref, coord)
+              [{down_right, :sand} | [{coord, :empty} | acc]]
 
-          element == :sand and get(name, down_left) == :empty ->
-            set(name, down_left, :sand)
-            set(name, coord, :empty)
+            element == :sand and not :ets.member(all_ref, down_left) ->
+              :ets.delete(all_ref, coord)
+              [{down_left, :sand} | [{coord, :empty} | acc]]
 
-          # all cells below are filled and inactive
-          # this might need to change if some cells allow cells through them like water?
-          not :ets.member(active_cells_table(name), down_left) and
-            not :ets.member(active_cells_table(name), down) and
-              not :ets.member(active_cells_table(name), down_right) ->
-            :ets.delete(active_cells_table(name), coord)
+            :ets.member(active_ref, down) or :ets.member(active_ref, down_right) or
+                :ets.member(active_ref, down_left) ->
+              # preserves cell as active
+              [{coord, :sand} | acc]
 
-          true ->
-            nil
-        end
-      end)
+            true ->
+              acc
+          end
+        end)
 
-      diff = :ets.tab2list(diff_cells_since_last_tick_table(name))
-      :ets.delete_all_objects(diff_cells_since_last_tick_table(name))
-      diff
+      inserts = Enum.filter(diffs, fn {_coord, element} -> element != :empty end)
+
+      :ets.insert(all_ref, inserts)
+      :ets.delete_all_objects(active_ref)
+      :ets.insert(active_ref, Enum.map(inserts, fn {coord, _element} -> {coord, true} end))
+      diffs
     end
 
-    def get(name \\ __MODULE__, coord) do
-      case :ets.lookup(all_cells_table(name), coord) do
-        [{_, value}] ->
-          value
+    def new() do
+      {:ets.new(:grid, [:public, :set]), :ets.new(:grid, [:public, :set])}
+    end
+
+    def get({all_cells, _}, coord) do
+      case :ets.lookup(all_cells, coord) do
+        [{_coord, element}] ->
+          element
 
         _ ->
-          @default_value
+          :empty
       end
     end
 
-    # I might want to do a single source of truth in the all_cells_table
-    def set(name \\ __MODULE__, coord, element)
-
-    def set(name, coord, :empty) do
-      with true <- :ets.delete(all_cells_table(name), coord),
-           true <- :ets.delete(active_cells_table(name), coord),
-           true <- :ets.insert(diff_cells_since_last_tick_table(name), {coord, :empty}) do
-        name
-      end
+    @spec bulk_insert(grid(), [{{integer(), integer()}, element()}]) :: true
+    # should never be given :empty
+    def bulk_insert({all_ref, active_ref}, inserts) do
+      :ets.insert(all_ref, inserts)
+      :ets.insert(active_ref, inserts)
     end
 
-    def set(name, coord, element) do
-      with true <- :ets.insert(all_cells_table(name), {coord, element}),
-           true <- :ets.insert(active_cells_table(name), {coord, element}),
-           true <- :ets.insert(diff_cells_since_last_tick_table(name), {coord, element}) do
-        name
-      end
+    def set({all_ref, active_ref}, coord, :empty) do
+      :ets.delete(all_ref, coord)
+      :ets.delete(active_ref, coord)
     end
 
-    defp all_cells_table(name) do
-      String.to_atom("all_cells_#{name}")
+    def set({all_ref, _}, coord, :stone) do
+      :ets.insert(all_ref, {coord, :stone})
     end
 
-    defp active_cells_table(name) do
-      String.to_atom("active_cells_#{name}")
-    end
-
-    defp diff_cells_since_last_tick_table(name) do
-      String.to_atom("diff_cells_#{name}")
-    end
-  end
-
-  defmodule Maps do
-    @behaviour FallingSand.Grid
-
-    @type cell :: FallingSand.Grid.cell()
-    @type coord :: FallingSand.Grid.coord()
-    @type element :: FallingSand.Grid.element()
-    @type grid() :: {active_cells :: MapSet.t(), all_cells :: map()}
-
-    @default_value :empty
-    defguard is_element(element) when element in [:sand, :stone]
-
-    @spec active_cells(grid()) :: FallingSand.Grid.cell()
-    def active_cells({map_set, map}) do
-      raise "Not yet implemented"
-    end
-
-    @spec all_cells(grid()) :: list(FallingSand.Grid.cell())
-    def all_cells({_, map}) do
-      Enum.map(map, fn {x, y} = coords -> %{y: y, x: x, element: Map.get(map, coords)} end)
-    end
-
-    @spec tick(grid()) :: grid()
-    def tick({map_set, _map} = table) do
-      Enum.reduce(map_set, table, fn {x, y} = coord, new_table ->
-        element = get(new_table, coord)
-
-        cond do
-          element == :sand and get(new_table, {x, y + 1}) == :empty ->
-            new_table
-            |> set({x, y + 1}, :sand)
-            |> set({x, y}, :empty)
-
-          element == :sand and get(new_table, {x + 1, y + 1}) == :empty ->
-            new_table
-            |> set({x + 1, y + 1}, :sand)
-            |> set({x, y}, :empty)
-
-          element == :sand and get(new_table, {x - 1, y + 1}) == :empty ->
-            new_table
-            |> set({x - 1, y + 1}, :sand)
-            |> set({x, y}, :empty)
-
-          true ->
-            new_table
-        end
-      end)
-    end
-
-    @spec new :: grid()
-    def new() do
-      {MapSet.new(), %{}}
-    end
-
-    @spec new :: grid()
-    def get({map_set, map}, coord) do
-      if MapSet.member?(map_set, coord) do
-        Map.get(map, coord)
-      else
-        @default_value
-      end
-    end
-
-    @spec set(grid(), coord(), element()) :: grid()
-    def set({map_set, map}, coord, element) when is_element(element) do
-      {MapSet.put(map_set, coord), Map.put(map, coord, element)}
-    end
-
-    def set({map_set, map}, coord, :empty) do
-      {MapSet.delete(map_set, coord), Map.delete(map, coord)}
+    def set({all_ref, active_ref}, coord, element) do
+      :ets.insert(all_ref, {coord, element})
+      :ets.insert(active_ref, {coord, true})
     end
   end
 end

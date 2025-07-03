@@ -1,14 +1,12 @@
 defmodule FallingSand.GridTest do
   use ExUnit.Case
-  doctest FallingSand.Grid
-  alias FallingSand.Grid.ETSDiffs, as: Grid
-  alias FallingSand.Grid.ETSDiffs
   alias FallingSand.Grid.ETS
-  alias FallingSand.Grid.Maps
+  alias FallingSand.Grid.Optimized
+  alias FallingSand.Grid
 
   test "all_cells/1" do
     grid = Grid.new()
-    grid = Grid.set(grid, {0, 0}, :sand)
+    Grid.set(grid, {0, 0}, :sand)
     assert [%{y: 0, x: 0, element: :sand}] = Grid.all_cells(grid)
   end
 
@@ -20,16 +18,21 @@ defmodule FallingSand.GridTest do
 
   test "set/3" do
     grid = Grid.new()
-    grid = Grid.set(grid, {0, 0}, :sand)
+    Grid.set(grid, {0, 0}, :sand)
     assert Grid.get(grid, {0, 0}) == :sand
   end
 
-  test "tick/1 _ sand falls _ returns diff with sand" do
+  test "bulk_insert/2" do
+    grid = Grid.new()
+    Grid.bulk_insert(grid, [{{0, 0}, :sand}, {{0, 1}, :sand}])
+    assert Grid.get(grid, {0, 0}) == :sand
+    assert Grid.get(grid, {0, 1}) == :sand
+  end
+
+  test "tick/1 _ sand falls" do
     grid = Grid.new()
     Grid.set(grid, {0, 0}, :sand)
-    diff = Grid.tick(grid)
-    assert {{0, 0}, :empty} in diff
-    assert {{0, 1}, :sand} in diff
+    Grid.tick(grid)
     assert Grid.get(grid, {0, 0}) == :empty
     assert Grid.get(grid, {0, 1}) == :sand
   end
@@ -48,86 +51,134 @@ defmodule FallingSand.GridTest do
     assert Grid.get(grid, {2, 1}) == :stone
   end
 
+  test "tick/1 sand falls in a line" do
+    grid = Grid.new()
+    Grid.set(grid, {0, 0}, :sand)
+    Grid.set(grid, {0, 1}, :sand)
+    Grid.tick(grid)
+
+    assert Grid.get(grid, {0, 0}) == :empty
+    assert Grid.get(grid, {0, 1}) == :sand
+    assert Grid.get(grid, {0, 2}) == :sand
+  end
+
+  test "tick/1 many grains" do
+    {all_cells, active_cells} = grid = Optimized.new()
+    coordinates = Enum.map(1..50000, fn n -> {{n, 0}, :sand} end)
+
+    Enum.each(coordinates, fn {coord, element} ->
+      Optimized.set(grid, coord, element)
+    end)
+
+    coord = {45203, 0}
+
+    Enum.each(1..60, fn _ ->
+      Optimized.tick(grid)
+    end)
+  end
+
+  test "tick/1 returns the diffs" do
+    grid = Grid.new()
+    Grid.set(grid, {0, 0}, :sand)
+    diffs = Grid.tick(grid)
+    assert {{0, 0}, :empty} in diffs
+    assert {{0, 1}, :sand} in diffs
+    diffs = Grid.tick(grid)
+    assert {{0, 1}, :empty} in diffs
+    assert {{0, 2}, :sand} in diffs
+  end
+
   @tag :skip
   test "tick/1 sand stops at edges? I'm not sure if this will be needed if I do an infinite sim..."
 
   @tag :benchmark
   @tag timeout: :infinity
-  test "benchmark tick cycle" do
-    output =
-      Benchee.run(
-        %{
-          "ETS" => {
-            fn {coordinates, frames, grid} ->
-              Enum.each(coordinates, fn coord ->
-                ETS.set(grid, coord, :sand)
-              end)
-
-              # Enum.each(1..frames, fn _ ->
-              #   ETS.tick(grid)
-              #   ETS.all_cells(grid)
-              # end)
-            end,
-            before_scenario: fn {coordinates, frames} ->
-              grid = ETS.new()
-              {coordinates, frames, grid}
-            end
-          },
-          "ETS with diffs" => {
-            fn {coordinates, frames, grid} ->
-              Enum.each(coordinates, fn coord ->
-                ETSDiffs.set(grid, coord, :sand)
-              end)
-
-              # Enum.each(1..frames, fn _ ->
-              #   ETSDiffs.tick(grid)
-              # end)
-            end,
-            before_scenario: fn {coordinates, frames} ->
-              grid = ETSDiffs.new()
-              {coordinates, frames, grid}
-            end
-          }
-          # "Maps" => fn {coordinates, frames} ->
-          #   grid = Maps.new()
-
-          #   grid =
-          #     Enum.reduce(coordinates, grid, fn coord, new_grid ->
-          #       Maps.set(new_grid, coord, :sand)
-          #     end)
-
-          #   grid =
-          #     Enum.reduce(1..frames, grid, fn _, new_grid ->
-          #       Maps.tick(grid)
-          #       Maps.all_cells(new_grid)
-          #       new_grid
-          #     end)
-          # end
+  test "benchmark all fns" do
+    Benchee.run(
+      %{
+        "Grid.get/2" => {
+          fn {grid, coordinates} ->
+            Enum.each(coordinates, fn {coord, _element} ->
+              Grid.get(grid, coord)
+            end)
+          end,
+          before_scenario: fn coordinates ->
+            {Grid.new(), coordinates}
+          end
         },
-        inputs: %{
-          # "1000 cells at 15 fps" => {generate_coords(1000), 15},
-          # "1000 cells at 60 fps" => {generate_coords(1000), 60},
-          # "5000 cells at 15 fps" => {generate_coords(1000), 15},
-          "10000 cells at 15 fps" => {generate_coords(10000), 15}
-          # "17500 cells at 15 fps" => {generate_coords(17500), 15},
-          # "25000 cells at 15 fps" => {generate_coords(25000), 15},
-          # "50000 cells at 15 fps" => {generate_coords(50000), 15}
-          # "75000 cells at 15 fps" => {generate_coords(75000), 15},
-          # "100000 cells at 15 fps" => {generate_coords(100_000), 15}
+        "Grid.set/3" => {
+          fn {grid, coordinates} ->
+            Enum.each(coordinates, fn {coord, element} ->
+              Grid.set(grid, coord, element)
+            end)
+          end,
+          before_scenario: fn coordinates ->
+            {Grid.new(), coordinates}
+          end
         }
-      )
+      },
+      inputs: %{
+        "50K Sand Particles" => Enum.map(1..50000, fn n -> {{n, 0}, :sand} end),
+        "50K Same Particle" => Enum.map(1..50000, fn _ -> {{0, 0}, :sand} end),
+        "50K Empty Particle" => Enum.map(1..50000, fn n -> {{n, 0}, :empty} end)
+      }
+    )
+  end
+
+  @tag :benchmark
+  @tag timeout: :infinity
+  test "benchmark tick cycle" do
+    Benchee.run(
+      %{
+        "ETS.tick/1" => {
+          fn grid ->
+            Enum.each(1..60, fn _ ->
+              ETS.tick(grid)
+            end)
+          end,
+          before_scenario: fn coordinates ->
+            grid = ETS.new()
+
+            Enum.each(coordinates, fn {coord, element} ->
+              ETS.set(grid, coord, element)
+            end)
+
+            grid
+          end
+        },
+        "Optimized.tick/1" => {
+          fn grid ->
+            Enum.each(1..60, fn _ ->
+              Optimized.tick(grid)
+            end)
+          end,
+          before_scenario: fn coordinates ->
+            grid = Optimized.new()
+
+            Enum.each(coordinates, fn {coord, element} ->
+              Optimized.set(grid, coord, element)
+            end)
+
+            grid
+          end
+        }
+      },
+      inputs: %{
+        "50K Sand Particles Falling" => Enum.map(1..50000, fn n -> {{n, 0}, :sand} end),
+        "50K Sand Particles Fall then Idle" =>
+          Enum.map(1..50000, fn n -> {{n, 0}, :sand} end) ++
+            Enum.map(0..50001, fn n -> {{n, 2}, :stone} end)
+      }
+    )
 
     # one_second = 1_000_000_000
 
-    # original = Enum.at(output.scenarios, 0)
     # map_impl = Enum.at(output.scenarios, 1)
 
     # assert map_impl.run_time_data.statistics.average <= original.run_time_data.statistics.average
-  end
-
-  defp generate_coords(size) do
-    for n <- 1..size do
-      {Enum.random(1..(size * 1000)), Enum.random(1..(size * 1000))}
-    end
+    # result = Enum.at(output, 1)
+    #   assert result.run_time_data.statistics.average <= original.run_time_data.statistics.average
+    # |> Enum.each(fn result ->
+    # end)
   end
 end

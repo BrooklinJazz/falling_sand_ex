@@ -2,31 +2,38 @@ defmodule FallingSand.GridServer do
   alias FallingSand.Grid
   use GenServer
 
-  @tick_interval 15
+  @tick_interval 5
   @pubsub_topic "grid"
+  @size 500
 
   def start_link(_opts) do
     GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
   end
 
-  @spec init(any()) :: {:ok, %{cursors: %{page_id: String.t(), x: integer(), y: integer()}}}
+  @spec init(any()) ::
+          {:ok,
+           %{
+             cursors: %{
+               String.t() => %{page_id: String.t(), x: integer(), y: integer(), element: atom()}
+             }
+           }}
   def init(_) do
     Process.send_after(self(), :tick, @tick_interval)
 
     grid = Grid.new()
 
-    for x <- 0..(100 - 1) do
-      Grid.set(grid, {x, 100 - 1}, :stone)
+    for x <- 0..(@size - 1) do
+      Grid.set(grid, {x, @size - 1}, :stone)
     end
 
-    for y <- 0..(100 - 1) do
+    for y <- 0..(@size - 1) do
       Grid.set(grid, {0, y}, :stone)
-      Grid.set(grid, {100 - 1, y}, :stone)
+      Grid.set(grid, {@size - 1, y}, :stone)
     end
 
     {:ok,
      %{
-       # eventually cursors will need to be
+       # I'll need to optimize cursors at some point.
        cursors: %{},
        grid: grid
      }}
@@ -42,13 +49,13 @@ defmodule FallingSand.GridServer do
 
   # I'm concerned about cursors getting stuck on the page if the user exits.
   # Maybe use presence or something to monitor joins, as well as a timer?
-  def handle_cast({:mousedown, %{y: y, x: x, page_id: page_id}}, state) do
-    cursors = Map.update(state.cursors, page_id, {x, y}, fn _ -> {x, y} end)
+  def handle_cast({:mousedown, cursor_info}, state) do
+    cursors = Map.put(state.cursors, cursor_info.page_id, cursor_info)
     {:noreply, %{state | cursors: cursors}}
   end
 
-  def handle_cast({:mousemove, %{y: y, x: x, page_id: page_id}}, state) do
-    cursors = Map.update(state.cursors, page_id, {x, y}, fn _ -> {x, y} end)
+  def handle_cast({:mousemove, cursor_info}, state) do
+    cursors = Map.put(state.cursors, cursor_info.page_id, cursor_info)
     {:noreply, %{state | cursors: cursors}}
   end
 
@@ -59,16 +66,21 @@ defmodule FallingSand.GridServer do
 
   def handle_info(:tick, state) do
     # I can probably make a batch update
-    Enum.each(state.cursors, fn {_page_id, {x, y}} ->
-      Grid.set(state.grid, {x, y}, :sand)
-    end)
+    inserts =
+      Enum.flat_map(state.cursors, fn {page_id, %{x: x, y: y, element: element}} ->
+        for xr <- (x - 10)..(x + 10), yr <- (y - 10)..(y + 10) do
+          {{xr, yr}, element}
+        end
+      end)
 
-    Grid.tick(state.grid)
+    Grid.bulk_insert(state.grid, inserts)
+
+    diffs = Grid.tick(state.grid)
 
     Phoenix.PubSub.broadcast(
       FallingSand.PubSub,
       @pubsub_topic,
-      {:diffs, Grid.all_cells(state.grid)}
+      {:diffs, Enum.map(diffs, fn {{x, y}, element} -> %{y: y, x: x, element: element} end)}
     )
 
     Process.send_after(self(), :tick, @tick_interval)

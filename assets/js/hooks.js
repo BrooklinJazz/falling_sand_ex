@@ -6,8 +6,8 @@ Hooks.PixelCanvas = {
         this.ctx = this.canvas.getContext("2d")
         this.cellSize = this.el.getAttribute("cellSize")
         // Listen for updates from server
-        this.handleEvent("render_grid", ({ all_cells }) => {
-            this.render(all_cells)
+        this.handleEvent("render_grid", ({ diffs }) => {
+            this.render(diffs)
         })
 
         this.canvas.addEventListener("click", (event) => {
@@ -54,11 +54,24 @@ Hooks.PixelCanvas = {
         return { x, y }
     },
 
-    render(all_cells) {
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
-        all_cells.forEach(({ x, y, cell }) => {
-            this.ctx.fillStyle = "black"
-            this.ctx.fillRect(x * this.cellSize, y * this.cellSize, this.cellSize, this.cellSize)
+    render(diffs) {
+        diffs.forEach(({ x, y, element }) => {
+            switch (element) {
+                case "sand":
+                    this.ctx.fillStyle = "orange"
+                    this.ctx.fillRect(x * this.cellSize, y * this.cellSize, this.cellSize, this.cellSize)
+                    break;
+                case "stone":
+                    this.ctx.fillStyle = "black"
+                    this.ctx.fillRect(x * this.cellSize, y * this.cellSize, this.cellSize, this.cellSize)
+                    break;
+                case "empty":
+                    this.ctx.clearRect(x * this.cellSize, y * this.cellSize, this.cellSize, this.cellSize)
+                    break;
+                default:
+            }
+            // this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
+
         })
     }
 }
