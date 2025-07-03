@@ -1,12 +1,12 @@
 defmodule FallingSandWeb.FallingSandLive do
   alias FallingSand.GridServer
   use FallingSandWeb, :live_view
-  @size 500
+  @size 100
 
   def mount(_params, _session, socket) do
     height = @size
     width = @size
-    cell_size = 1
+    cell_size = 5
     page_id = UUID.uuid1()
 
     if connected?(socket) do

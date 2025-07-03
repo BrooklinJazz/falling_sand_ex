@@ -34,6 +34,8 @@ Hooks.PixelCanvas = {
                 const { x, y } = this.getCanvasCoords(event)
                 if (this.x != x || this.y != y) {
                     this.pushEvent("mousemove", { x, y })
+                    this.x = x
+                    this.x = y
                 }
             }
         })

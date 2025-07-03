@@ -2,9 +2,9 @@ defmodule FallingSand.GridServer do
   alias FallingSand.Grid
   use GenServer
 
-  @tick_interval 5
+  @tick_interval 15
   @pubsub_topic "grid"
-  @size 500
+  @size 100
 
   def start_link(_opts) do
     GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
@@ -66,14 +66,9 @@ defmodule FallingSand.GridServer do
 
   def handle_info(:tick, state) do
     # I can probably make a batch update
-    inserts =
-      Enum.flat_map(state.cursors, fn {page_id, %{x: x, y: y, element: element}} ->
-        for xr <- (x - 10)..(x + 10), yr <- (y - 10)..(y + 10) do
-          {{xr, yr}, element}
-        end
-      end)
-
-    Grid.bulk_insert(state.grid, inserts)
+    Enum.each(state.cursors, fn {_page_id, %{x: x, y: y, element: element}} ->
+      Grid.set(state.grid, {{x, y}, element})
+    end)
 
     diffs = Grid.tick(state.grid)
 

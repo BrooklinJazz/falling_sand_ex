@@ -65,13 +65,6 @@ defmodule FallingSand.Grid.WithActiveTracking do
   end
 
   @impl true
-  # should never be given :empty
-  def bulk_insert({all_ref, active_ref}, inserts) do
-    :ets.insert(all_ref, inserts)
-    :ets.insert(active_ref, inserts)
-  end
-
-  @impl true
   def set({all_ref, active_ref}, coord, :empty) do
     :ets.delete(all_ref, coord)
     :ets.delete(active_ref, coord)

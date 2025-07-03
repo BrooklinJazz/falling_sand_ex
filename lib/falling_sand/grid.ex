@@ -6,7 +6,6 @@ defmodule FallingSand.Grid do
   @type cell :: {coordinate(), element()}
   @type json_safe_cell :: %{x: integer(), y: integer(), element: element()}
   @callback all_cells(grid()) :: list(json_safe_cell())
-  @callback bulk_insert(grid(), []) :: list(cell())
   @callback get(grid(), coordinate()) :: cell()
   @callback new :: grid()
   @callback set(grid(), {integer(), integer()}, element()) :: any()
@@ -14,11 +13,10 @@ defmodule FallingSand.Grid do
 
   @spec impl() :: any()
   def impl() do
-    Application.get_env(:falling_sand, :grid, FallingSand.Grid.WithActiveTracking)
+    Application.get_env(:falling_sand, :grid, FallingSand.Grid.WithDiffTracking)
   end
 
   def all_cells(grid), do: impl().all_cells(grid)
-  def bulk_insert(grid, cells), do: impl().bulk_insert(grid, cells)
 
   def get(grid, coordinates), do: impl().get(grid, coordinates)
 
