@@ -44,7 +44,17 @@ defmodule FallingSandWeb.FallingSandLive do
   end
 
   def handle_event("set", %{"x" => x, "y" => y}, socket) do
-    Grid.set(:grid, {x, y}, :sand)
+    r = 2
+
+    for xr <- (x - r)..(x + r), yr <- (y - r)..(y + r) do
+      {xr, yr}
+    end
+    |> Enum.shuffle()
+    |> Enum.take(5)
+    |> Enum.each(fn {x, y} ->
+      Grid.set(:grid, {x, y}, :sand)
+    end)
+
     {:noreply, socket}
   end
 

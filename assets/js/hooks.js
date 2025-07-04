@@ -1,56 +1,57 @@
 let Hooks = {}
 
+// Some bullshit is happening because of `this`. God, I work with JavaScript for a tiny little bit and my life is miserable.
 Hooks.PixelCanvas = {
     mounted() {
         this.canvas = this.el
         this.ctx = this.canvas.getContext("2d")
         this.cellSize = this.el.getAttribute("cellSize")
         this.shouldWait = false
-        this.interval = false
+        this.isMouseDown = false
+        this.x = 0
+        this.y = 0
         // Listen for updates from server
         this.handleEvent("render_grid", ({ diffs }) => {
             this.render(diffs)
         })
-        const self = this
-        this.canvas.addEventListener('mousedown', (event) => {
-            self.isMouseDown = true;
-
-            self.interval = setInterval(() => {
-                const { x, y } = self.getCanvasCoords(self, event)
+        this.interval = setInterval(() => {
+            if (this.isMouseDown) {
                 console.log("INTERVAL")
-                self.pushEvent("set", { x, y })
-            }, 100)
+                this.pushEvent("set", { x: this.x, y: this.y })
+            }
+        }, 100)
+        this.canvas.addEventListener('mousedown', (event) => {
+            this.isMouseDown = true;
+            const { x, y } = this.getCanvasCoords(event)
+            this.x = x
+            this.y = y
         });
 
         this.canvas.addEventListener('mouseup', () => {
             this.isMouseDown = false;
-            clearInterval(this.interval)
+            const { x, y } = this.getCanvasCoords(event)
         });
 
-        // Mouse move (only when dragging)
-
+        // The interval is kind of wrong because set happens on every mouse move. I think I should have the interval always run and somehow change the x and y.
         this.canvas.addEventListener("mousemove", (event) => {
-            clearInterval(this.interval)
             if (this.isMouseDown) {
-                const { x, y } = self.getCanvasCoords(self, event)
-                self.pushEvent("set", { x, y })
-                self.interval = setInterval(() => {
-                    self.pushEvent("set", { x, y })
-                }, 10)
+                const { x, y } = this.getCanvasCoords(event)
+                this.x = x
+                this.y = y
             }
         })
     },
 
-    getCanvasCoords(context, event) {
-        const rect = context.canvas.getBoundingClientRect()
-        const scaleX = context.canvas.width / rect.width
-        const scaleY = context.canvas.height / rect.height
+    getCanvasCoords(event) {
+        const rect = this.canvas.getBoundingClientRect()
+        const scaleX = this.canvas.width / rect.width
+        const scaleY = this.canvas.height / rect.height
 
         const pixelX = (event.clientX - rect.left) * scaleX
         const pixelY = (event.clientY - rect.top) * scaleY
 
-        const x = Math.floor(pixelX / context.cellSize)
-        const y = Math.floor(pixelY / context.cellSize)
+        const x = Math.floor(pixelX / this.cellSize)
+        const y = Math.floor(pixelY / this.cellSize)
 
         return { x, y }
     },
