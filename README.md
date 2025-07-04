@@ -37,7 +37,7 @@ Ready to run in production? Please [check our deployment guides](https://hexdocs
 * Users subscribe to broadcasted events only for their page coordinates?
 * Scale with a dns cluster?
 
-* ChunkServer
+* GridServer
   * ActiveCells
   * tick -> broadcast diffs only to the chunk coords
   * 

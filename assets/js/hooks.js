@@ -5,59 +5,58 @@ Hooks.PixelCanvas = {
         this.canvas = this.el
         this.ctx = this.canvas.getContext("2d")
         this.cellSize = this.el.getAttribute("cellSize")
+        this.shouldWait = false
+        this.interval = false
         // Listen for updates from server
         this.handleEvent("render_grid", ({ diffs }) => {
             this.render(diffs)
         })
+        const self = this
+        this.canvas.addEventListener('mousedown', (event) => {
+            self.isMouseDown = true;
 
-        this.canvas.addEventListener("click", (event) => {
-            const { x, y } = this.getCanvasCoords(event)
-            this.pushEvent("click_pixel", { x, y })
-        })
+            self.interval = setInterval(() => {
+                const { x, y } = self.getCanvasCoords(self, event)
+                console.log("INTERVAL")
+                self.pushEvent("set", { x, y })
+            }, 100)
+        });
 
-        // Mouse down
-        this.canvas.addEventListener("mousedown", (event) => {
-            this.isDrawing = true
-            const { x, y } = this.getCanvasCoords(event)
-            this.pushEvent("mousedown", { x, y })
-        })
-
-        // Mouse up
-        this.canvas.addEventListener("mouseup", (event) => {
-            this.isDrawing = false
-            this.pushEvent("mouseup", {})
-        })
+        this.canvas.addEventListener('mouseup', () => {
+            this.isMouseDown = false;
+            clearInterval(this.interval)
+        });
 
         // Mouse move (only when dragging)
+
         this.canvas.addEventListener("mousemove", (event) => {
-            if (this.isDrawing) {
-                const { x, y } = this.getCanvasCoords(event)
-                if (this.x != x || this.y != y) {
-                    this.pushEvent("mousemove", { x, y })
-                    this.x = x
-                    this.x = y
-                }
+            clearInterval(this.interval)
+            if (this.isMouseDown) {
+                const { x, y } = self.getCanvasCoords(self, event)
+                self.pushEvent("set", { x, y })
+                self.interval = setInterval(() => {
+                    self.pushEvent("set", { x, y })
+                }, 10)
             }
         })
     },
 
-
-    getCanvasCoords(event) {
-        const rect = this.canvas.getBoundingClientRect()
-        const scaleX = this.canvas.width / rect.width
-        const scaleY = this.canvas.height / rect.height
+    getCanvasCoords(context, event) {
+        const rect = context.canvas.getBoundingClientRect()
+        const scaleX = context.canvas.width / rect.width
+        const scaleY = context.canvas.height / rect.height
 
         const pixelX = (event.clientX - rect.left) * scaleX
         const pixelY = (event.clientY - rect.top) * scaleY
 
-        const x = Math.floor(pixelX / this.cellSize)
-        const y = Math.floor(pixelY / this.cellSize)
+        const x = Math.floor(pixelX / context.cellSize)
+        const y = Math.floor(pixelY / context.cellSize)
 
         return { x, y }
     },
 
     render(diffs) {
-        diffs.forEach(({ x, y, element }) => {
+        diffs.forEach(([x, y, element]) => {
             switch (element) {
                 case "sand":
                     this.ctx.fillStyle = "orange"
@@ -72,8 +71,6 @@ Hooks.PixelCanvas = {
                     break;
                 default:
             }
-            // this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
-
         })
     }
 }

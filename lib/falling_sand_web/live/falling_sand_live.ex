@@ -1,4 +1,5 @@
 defmodule FallingSandWeb.FallingSandLive do
+  alias FallingSand.Grid
   alias FallingSand.GridServer
   use FallingSandWeb, :live_view
   @size 100
@@ -42,36 +43,11 @@ defmodule FallingSandWeb.FallingSandLive do
     """
   end
 
-  def handle_event("click_pixel", %{"x" => _x, "y" => _y}, socket) do
+  def handle_event("set", %{"x" => x, "y" => y}, socket) do
+    Grid.set(:grid, {x, y}, :sand)
     {:noreply, socket}
   end
 
-  def handle_event("mouseup", _, socket) do
-    GenServer.cast(GridServer, {:mouseup, %{page_id: socket.assigns.page_id}})
-    {:noreply, assign(socket, is_drawing: false)}
-  end
-
-  def handle_event("mousedown", %{"x" => x, "y" => y}, socket) do
-    # It's a bit hacky calling GenServer directly here
-    # HARD CODING SAND FOR NOW
-    GenServer.cast(
-      GridServer,
-      {:mousedown, %{x: x, y: y, page_id: socket.assigns.page_id, element: :sand}}
-    )
-
-    {:noreply, assign(socket, cursor_x: x, cursor_y: y, is_drawing: true)}
-  end
-
-  def handle_event("mousemove", %{"x" => x, "y" => y}, socket) do
-    GenServer.cast(
-      GridServer,
-      {:mousemove, %{x: x, y: y, page_id: socket.assigns.page_id, element: :sand}}
-    )
-
-    {:noreply, assign(socket, cursor_x: x, cursor_y: y)}
-  end
-
-  # This sends all cells, not just diffs for now
   def handle_info({:diffs, diffs}, socket) do
     {:noreply, push_event(socket, "render_grid", %{diffs: diffs})}
   end

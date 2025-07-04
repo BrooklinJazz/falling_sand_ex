@@ -1,4 +1,5 @@
 defmodule FallingSand.GridServer do
+  alias FallingSand.Cursors
   alias FallingSand.Grid
   use GenServer
 
@@ -6,8 +7,17 @@ defmodule FallingSand.GridServer do
   @pubsub_topic "grid"
   @size 100
 
-  def start_link(_opts) do
-    GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
+  def start_link(opts) do
+    tick = Keyword.get(opts, :tick, @tick_interval)
+    name = Keyword.get(opts, :name)
+    cursors = Keyword.get(opts, :cursors, :cursors)
+    grid = Keyword.get(opts, :grid) || Grid.new()
+    GenServer.start_link(__MODULE__, [tick: tick, grid: grid, cursors: cursors], name: name)
+  end
+
+  def set(grid \\ :grid, {x, y} = coord, element) do
+    Grid.set(grid, coord, element)
+    broadcast_diffs([[x, y, element]])
   end
 
   @spec init(any()) ::
@@ -17,25 +27,20 @@ defmodule FallingSand.GridServer do
                String.t() => %{page_id: String.t(), x: integer(), y: integer(), element: atom()}
              }
            }}
-  def init(_) do
-    Process.send_after(self(), :tick, @tick_interval)
+  def init(opts) do
+    tick = Keyword.get(opts, :tick)
+    grid = Keyword.get(opts, :grid)
+    cursors = Keyword.get(opts, :cursors)
 
-    grid = Grid.new()
-
-    for x <- 0..(@size - 1) do
-      Grid.set(grid, {x, @size - 1}, :stone)
-    end
-
-    for y <- 0..(@size - 1) do
-      Grid.set(grid, {0, y}, :stone)
-      Grid.set(grid, {@size - 1, y}, :stone)
+    if tick do
+      Process.send_after(self(), :tick, tick)
     end
 
     {:ok,
      %{
-       # I'll need to optimize cursors at some point.
-       cursors: %{},
-       grid: grid
+       cursors: cursors,
+       grid: grid,
+       tick: tick
      }}
   end
 
@@ -47,38 +52,35 @@ defmodule FallingSand.GridServer do
     {:reply, Grid.all_cells(state.grid), state}
   end
 
-  # I'm concerned about cursors getting stuck on the page if the user exits.
-  # Maybe use presence or something to monitor joins, as well as a timer?
-  def handle_cast({:mousedown, cursor_info}, state) do
-    cursors = Map.put(state.cursors, cursor_info.page_id, cursor_info)
-    {:noreply, %{state | cursors: cursors}}
-  end
-
-  def handle_cast({:mousemove, cursor_info}, state) do
-    cursors = Map.put(state.cursors, cursor_info.page_id, cursor_info)
-    {:noreply, %{state | cursors: cursors}}
-  end
-
   def handle_cast({:mouseup, %{page_id: page_id}}, state) do
     cursors = Map.delete(state.cursors, page_id)
     {:noreply, %{state | cursors: cursors}}
   end
 
   def handle_info(:tick, state) do
-    # I can probably make a batch update
-    Enum.each(state.cursors, fn {_page_id, %{x: x, y: y, element: element}} ->
-      Grid.set(state.grid, {{x, y}, element})
-    end)
+    # Maybe the GenServer shouldn't be responsible for this. These could all be set in between-ticks and that would be fine.
+    # Cursors.all_cursors(state.cursors) |> Enum
+    # Enum.each(state.cursors, fn {_page_id, %{x: x, y: y, element: element}} ->
+    #   Grid.set(state.grid, {{x, y}, element})
+    # end)
 
     diffs = Grid.tick(state.grid)
 
+    broadcast_diffs(Enum.map(diffs, fn {{x, y}, element} -> [x, y, element] end))
+
+    if state.tick do
+      Process.send_after(self(), :tick, state.tick)
+    end
+
+    {:noreply, state}
+  end
+
+  def broadcast_diffs(diffs) do
     Phoenix.PubSub.broadcast(
       FallingSand.PubSub,
       @pubsub_topic,
-      {:diffs, Enum.map(diffs, fn {{x, y}, element} -> %{y: y, x: x, element: element} end)}
+      # eventually I should optimize tick to return this structure
+      {:diffs, diffs}
     )
-
-    Process.send_after(self(), :tick, @tick_interval)
-    {:noreply, state}
   end
 end

@@ -2,14 +2,19 @@ defmodule FallingSand.Grid.WithDiffTracking do
   @behaviour FallingSand.Grid
 
   @impl true
-  def all_cells({all_ref, _, _}) do
-    :ets.tab2list(all_ref)
-    |> Enum.map(fn {{x, y}, element} -> %{y: y, x: x, element: element} end)
+  def all_cells(name) do
+    :ets.tab2list(all_ref(name))
+    |> Enum.map(fn {{x, y}, element} -> [x, y, element] end)
   end
 
   @impl true
-  def tick({all_ref, active_ref, diff_ref}) do
-    # These being unsorted might be causing me problems
+  def tick(name) do
+    all_ref = all_ref(name)
+    active_ref = active_ref(name)
+    diff_ref = diff_ref(name)
+    {all_ref, active_ref, diff_ref}
+    # These being unsorted might cause problems
+    # I'm considering storing as {y, x} in an ordered set so they will be top-down.
     :ets.tab2list(active_ref)
     |> Enum.each(fn {{x, y} = coord, true} ->
       element = :ets.lookup_element(all_ref, coord, 2)
@@ -57,27 +62,19 @@ defmodule FallingSand.Grid.WithDiffTracking do
   end
 
   @impl true
-  def new() do
-    {
-      :ets.new(:grid, [:public, :set]),
-      :ets.new(:grid, [:public, :set]),
-      :ets.new(:grid, [:public, :set])
-    }
+  def new(name \\ nil) do
+    name = name || UUID.uuid1()
+    opts = [:public, :set, :named_table]
+    :ets.new(all_ref(name), opts)
+    :ets.new(active_ref(name), opts)
+    :ets.new(diff_ref(name), opts)
+
+    name
   end
 
   @impl true
-  def get({all_cells, _, _}, coord) do
-    case :ets.lookup(all_cells, coord) do
-      [{_coord, element}] ->
-        element
-
-      _ ->
-        :empty
-    end
-  end
-
-  def get(table, coord) do
-    case :ets.lookup(table, coord) do
+  def get(name, coord) do
+    case :ets.lookup(all_ref(name), coord) do
       [{_coord, element}] ->
         element
 
@@ -87,18 +84,14 @@ defmodule FallingSand.Grid.WithDiffTracking do
   end
 
   @impl true
-  def set({all_ref, active_ref, _}, coord, :empty) do
-    :ets.delete(all_ref, coord)
-    :ets.delete(active_ref, coord)
+  def set(name, coord, :empty) do
+    :ets.delete(all_ref(name), coord)
+    :ets.delete(active_ref(name), coord)
   end
 
-  def set({all_ref, _, _}, coord, :stone) do
-    :ets.insert(all_ref, {coord, :stone})
-  end
-
-  def set({all_ref, active_ref, _}, coord, element) do
-    :ets.insert(all_ref, {coord, element})
-    :ets.insert(active_ref, {coord, true})
+  def set(name, coord, element) do
+    :ets.insert(all_ref(name), {coord, element})
+    :ets.insert(active_ref(name), {coord, true})
   end
 
   defp reserved?(diff_ref, coord) do
@@ -108,4 +101,8 @@ defmodule FallingSand.Grid.WithDiffTracking do
       _ -> false
     end
   end
+
+  defp active_ref(name), do: String.to_atom("#{name}_active")
+  defp all_ref(name), do: String.to_atom("#{name}_all")
+  defp diff_ref(name), do: String.to_atom("#{name}_diff")
 end

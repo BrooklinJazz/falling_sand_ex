@@ -2,11 +2,24 @@ defmodule FallingSand.Application do
   # See https://hexdocs.pm/elixir/Application.html
   # for more information on OTP Applications
   @moduledoc false
+  @size Application.compile_env(:falling_sand, :size, 100)
+  alias FallingSand.Grid
 
   use Application
 
   @impl true
   def start(_type, _args) do
+    grid = Grid.new(:grid)
+
+    Enum.each(0..@size, fn x ->
+      Grid.set(grid, {x, @size - 1}, :stone)
+    end)
+
+    Enum.each(0..@size, fn y ->
+      Grid.set(grid, {0, y}, :stone)
+      Grid.set(grid, {@size - 1, y}, :stone)
+    end)
+
     children =
       [
         FallingSandWeb.Telemetry,
@@ -17,8 +30,12 @@ defmodule FallingSand.Application do
         # Start a worker by calling: FallingSand.Worker.start_link(arg)
         # {FallingSand.Worker, arg},
         # Start to serve requests, typically the last entry
+
         FallingSandWeb.Endpoint
-      ] ++ if Mix.env() == :test, do: [], else: [{FallingSand.GridServer, []}]
+      ] ++
+        if Mix.env() == :test,
+          do: [],
+          else: [{FallingSand.GridServer, [grid: grid, name: FallingSand.GridServer]}]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
