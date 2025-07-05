@@ -11,8 +11,6 @@ defmodule FallingSand.Grid.WithBounds do
     diff =
       :ets.match(ref, {{:"$1", :"$2"}, {true, :"$3"}})
       |> Enum.flat_map(fn [y, x, element] ->
-        # I think I probably need some condition during set that will make the nearby elements active again
-        # Maybe I should move the in_bounds? check to here rather than doing it in the set?
         cond do
           element == :sand and not :ets.member(ref, {y + 1, x}) ->
             set(ref, {x, y}, :empty)
@@ -65,7 +63,7 @@ defmodule FallingSand.Grid.WithBounds do
   end
 
   @impl true
-  @spec get(atom() | :ets.tid(), any()) :: {boolean(), atom()}
+  @spec get(atom() | :ets.tid(), any()) :: atom()
   def get(ref, {x, y}) do
     case :ets.lookup_element(ref, {y, x}, 2, {false, :empty}) do
       {_, element} -> element

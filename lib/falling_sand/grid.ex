@@ -7,7 +7,7 @@ defmodule FallingSand.Grid do
   @type json_safe_cell :: %{x: integer(), y: integer(), element: element()}
   @callback all_cells(grid()) :: list(json_safe_cell())
   @callback get(grid(), coordinate()) :: cell()
-  @callback new(name :: atom()) :: grid()
+  @callback new(opts :: list()) :: grid()
   @callback set(grid(), {integer(), integer()}, element()) :: any()
   @callback tick(grid()) :: diff()
 
