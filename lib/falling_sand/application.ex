@@ -2,23 +2,15 @@ defmodule FallingSand.Application do
   # See https://hexdocs.pm/elixir/Application.html
   # for more information on OTP Applications
   @moduledoc false
-  @size Application.compile_env(:falling_sand, :size, 100)
+  @size Application.compile_env(:falling_sand, :size)
   alias FallingSand.Grid
 
   use Application
 
   @impl true
   def start(_type, _args) do
-    grid = Grid.new(:grid)
-
-    Enum.each(0..@size, fn x ->
-      Grid.set(grid, {x, @size - 1}, :stone)
-    end)
-
-    Enum.each(0..@size, fn y ->
-      Grid.set(grid, {0, y}, :stone)
-      Grid.set(grid, {@size - 1, y}, :stone)
-    end)
+    grid =
+      Grid.new(name: :grid, min: 0, max: Application.get_env(:falling_sand, :grid_size))
 
     children =
       [

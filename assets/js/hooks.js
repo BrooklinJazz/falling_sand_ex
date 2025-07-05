@@ -8,6 +8,7 @@ Hooks.PixelCanvas = {
         this.cellSize = this.el.getAttribute("cellSize")
         this.shouldWait = false
         this.isMouseDown = false
+        this.all_cells = []
         this.x = 0
         this.y = 0
         // Listen for updates from server
@@ -16,10 +17,9 @@ Hooks.PixelCanvas = {
         })
         this.interval = setInterval(() => {
             if (this.isMouseDown) {
-                console.log("INTERVAL")
                 this.pushEvent("set", { x: this.x, y: this.y })
             }
-        }, 100)
+        }, 15)
         this.canvas.addEventListener('mousedown', (event) => {
             this.isMouseDown = true;
             const { x, y } = this.getCanvasCoords(event)
@@ -29,10 +29,8 @@ Hooks.PixelCanvas = {
 
         this.canvas.addEventListener('mouseup', () => {
             this.isMouseDown = false;
-            const { x, y } = this.getCanvasCoords(event)
         });
 
-        // The interval is kind of wrong because set happens on every mouse move. I think I should have the interval always run and somehow change the x and y.
         this.canvas.addEventListener("mousemove", (event) => {
             if (this.isMouseDown) {
                 const { x, y } = this.getCanvasCoords(event)

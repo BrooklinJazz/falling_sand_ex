@@ -1,5 +1,6 @@
 defmodule FallingSand.GridTest do
   use ExUnit.Case
+  alias FallingSand.Grid.WithBounds
   alias FallingSand.Grid.WithDiffTracking
   alias FallingSand.Grid.WithActiveTracking
   alias FallingSand.Grid
@@ -16,10 +17,16 @@ defmodule FallingSand.GridTest do
     assert Grid.get(grid, {0, 0}) == :empty
   end
 
-  test "set/3" do
+  test "set/3 sand" do
     grid = Grid.new()
     Grid.set(grid, {0, 0}, :sand)
     assert Grid.get(grid, {0, 0}) == :sand
+  end
+
+  test "set/3 stone" do
+    grid = Grid.new()
+    Grid.set(grid, {0, 0}, :stone)
+    assert Grid.get(grid, {0, 0}) == :stone
   end
 
   test "tick/1 _ sand falls down" do
@@ -82,26 +89,54 @@ defmodule FallingSand.GridTest do
     Grid.set(grid, {2, 0}, :sand)
     Grid.set(grid, {0, 1}, :stone)
     Grid.set(grid, {2, 1}, :stone)
-    Grid.set(grid, {3, 1}, :ston)
+    Grid.set(grid, {3, 1}, :stone)
 
     Grid.tick(grid)
     assert Grid.get(grid, {1, 1}) == :sand
     assert Grid.all_cells(grid) |> Enum.count() == 5
   end
 
-  test "tick/1 returns the diffs" do
+  test "tick/1 sand falling diffs" do
     grid = Grid.new()
     Grid.set(grid, {0, 0}, :sand)
     diffs = Grid.tick(grid)
-    assert {{0, 0}, :empty} in diffs
-    assert {{0, 1}, :sand} in diffs
+    assert [0, 0, :empty] in diffs
+    assert [0, 1, :sand] in diffs
+  end
+
+  test "tick/1 stone set diff" do
+    grid = Grid.new()
+    Grid.set(grid, {0, 0}, :stone)
     diffs = Grid.tick(grid)
-    assert {{0, 1}, :empty} in diffs
-    assert {{0, 2}, :sand} in diffs
+    assert [0, 0, :stone] in diffs
+  end
+
+  test "set/3 sand beyond edges of grid size" do
+    grid = Grid.new(start: {0, 0}, end: {500, 500})
+    Grid.set(grid, {-1, 0}, :sand)
+    Grid.set(grid, {0, -1}, :sand)
+    Grid.set(grid, {500, 501}, :sand)
+    Grid.set(grid, {501, 500}, :sand)
+    assert Grid.get(grid, {-1, 0}) == :empty
+    assert Grid.get(grid, {0, -1}) == :empty
+    assert Grid.get(grid, {500, 501}) == :empty
+    assert Grid.get(grid, {501, 500}) == :empty
   end
 
   @tag :skip
-  test "tick/1 sand stops at edges? I'm not sure if this will be needed if I do an infinite sim..."
+  test "tick/1 sand falls beyond edges of grid size" do
+    grid = Grid.new(name: :with_bounds, start: {0, 0}, end: {500, 500})
+    Grid.set(grid, {0, 500}, :sand)
+    Grid.set(grid, {500, 500}, :sand)
+    diffs = Grid.tick(grid)
+    assert {{500, 500}, :empty} in diffs
+    assert {{0, 500}, :empty} in diffs
+    assert Grid.get(grid, {0, 501}) == :empty
+    assert Grid.get(grid, {500, 501}) == :empty
+  end
+
+  @tag :skip
+  test "tick/1 sand doesn't get stuck if cells below are removed"
 
   @tag :benchmark
   @tag timeout: :infinity
@@ -201,6 +236,22 @@ defmodule FallingSand.GridTest do
 
             grid
           end
+        },
+        "WithBounds.tick/1" => {
+          fn grid ->
+            Enum.each(1..60, fn _ ->
+              WithBounds.tick(grid)
+            end)
+          end,
+          before_scenario: fn coordinates ->
+            grid = WithBounds.new()
+
+            Enum.each(coordinates, fn {coord, element} ->
+              WithBounds.set(grid, coord, element)
+            end)
+
+            grid
+          end
         }
       },
       time: 2,
@@ -228,5 +279,41 @@ defmodule FallingSand.GridTest do
 
     # # Should be able to simulate 50K particles at 60 frames in under one second.
     # assert grid_results.run_time_data.statistics.average <= one_second
+  end
+
+  @tag :benchmark
+  @tag :infinity
+  test ":ets.tab2list vs :ets.select with active boolean" do
+    size = 1_000_000
+
+    Benchee.run(%{
+      ":ets.tab2list" =>
+        {fn table ->
+           :ets.tab2list(table)
+         end,
+         before_scenario: fn _ ->
+           table = :ets.new(:table, [:ordered_set, :public])
+
+           for n <- 1..div(size, 2) do
+             :ets.insert(table, {{n, n}, {true, :sand}})
+           end
+
+           table
+         end},
+      ":ets.select" => {
+        fn table ->
+          :ets.match(table, {{:"$1", :"$2"}, {true, :"$3"}})
+        end,
+        before_scenario: fn _ ->
+          table = :ets.new(:table, [:ordered_set, :public])
+
+          for n <- 1..size do
+            :ets.insert(table, {{n, n}, {rem(n, 2) == 0, :sand}})
+          end
+
+          table
+        end
+      }
+    })
   end
 end

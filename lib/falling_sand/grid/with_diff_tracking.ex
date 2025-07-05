@@ -51,6 +51,11 @@ defmodule FallingSand.Grid.WithDiffTracking do
           not :ets.member(active_ref, down_left) and not :ets.member(active_ref, down_right) ->
           :ets.delete(active_ref, coord)
 
+        element == :stone ->
+          # used by GridServer to broadcast the diff
+          :ets.insert(diff_ref, {coord, :stone})
+          :ets.delete(active_ref, coord)
+
         true ->
           nil
       end

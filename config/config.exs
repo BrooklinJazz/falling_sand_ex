@@ -21,6 +21,11 @@ config :falling_sand, FallingSandWeb.Endpoint,
   pubsub_server: FallingSand.PubSub,
   live_view: [signing_salt: "jfii5M1+"]
 
+config :falling_sand,
+  grid_size: 100,
+  tick_interval: 10,
+  cell_size: 4
+
 # Configures the mailer
 #
 # By default it uses the "Local" adapter which stores the emails

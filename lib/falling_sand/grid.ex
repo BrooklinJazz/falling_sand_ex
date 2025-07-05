@@ -13,14 +13,16 @@ defmodule FallingSand.Grid do
 
   @spec impl() :: any()
   def impl() do
-    Application.get_env(:falling_sand, :grid, FallingSand.Grid.WithDiffTracking)
+    # I do this to make swapping to new versions easier, and it lets me benchmark and test new optimized versins against the old verson.
+    FallingSand.Grid.WithBounds
   end
 
   def all_cells(grid), do: impl().all_cells(grid)
 
   def get(grid, coordinates), do: impl().get(grid, coordinates)
 
-  def new(name \\ nil), do: impl().new(name)
+  @spec new(list()) :: any()
+  def new(opts \\ []), do: impl().new(opts)
 
   def set(grid, coordinates, value), do: impl().set(grid, coordinates, value)
   def tick(grid), do: impl().tick(grid)

@@ -2,12 +2,13 @@ defmodule FallingSandWeb.FallingSandLive do
   alias FallingSand.Grid
   alias FallingSand.GridServer
   use FallingSandWeb, :live_view
-  @size 100
+  @size Application.compile_env(:falling_sand, :grid_size)
+  @cell_size Application.compile_env(:falling_sand, :cell_size)
 
   def mount(_params, _session, socket) do
     height = @size
     width = @size
-    cell_size = 5
+    cell_size = @cell_size
     page_id = UUID.uuid1()
 
     if connected?(socket) do
@@ -18,6 +19,7 @@ defmodule FallingSandWeb.FallingSandLive do
 
     {:ok,
      assign(socket,
+       element: :sand,
        height: height * cell_size,
        width: width * cell_size,
        cell_size: cell_size,
@@ -30,32 +32,52 @@ defmodule FallingSandWeb.FallingSandLive do
 
   def render(assigns) do
     ~H"""
-    <h1>Falling Sand Sim</h1>
-    <canvas
-      id="pixel-canvas"
-      phx-hook="PixelCanvas"
-      cellSize={@cell_size}
-      height={@height}
-      width={@width}
-    >
-    </canvas>
-    <hr />
+    <section class="max-w-fit h-screen mx-auto flex flex-col justify-center">
+      <canvas
+        class="border-2 border-gray-500 border-dotted"
+        id="pixel-canvas"
+        phx-hook="PixelCanvas"
+        cellSize={@cell_size}
+        height={@height}
+        width={@width}
+      >
+      </canvas>
+      <article class="mt-1">
+        <.button phx-click="select-element:sand">Sand</.button>
+        <.button phx-click="select-element:stone">Stone</.button>
+      </article>
+    </section>
     """
   end
 
   def handle_event("set", %{"x" => x, "y" => y}, socket) do
+    Grid.set(:grid, {x, y}, socket.assigns.element)
+
     r = 2
 
-    for xr <- (x - r)..(x + r), yr <- (y - r)..(y + r) do
-      {xr, yr}
+    case socket.assigns.element do
+      :sand ->
+        for xr <- (x - r)..(x + r), yr <- (y - r)..(y + r) do
+          {xr, yr}
+        end
+        # |> Enum.shuffle()
+        # |> Enum.take(5)
+        |> Enum.each(fn {x, y} ->
+          Grid.set(:grid, {x, y}, :sand)
+        end)
+
+      :stone ->
+        for xr <- (x - r)..(x + r), yr <- (y - r)..(y + r) do
+          {xr, yr}
+          Grid.set(:grid, {xr, yr}, :stone)
+        end
     end
-    |> Enum.shuffle()
-    |> Enum.take(5)
-    |> Enum.each(fn {x, y} ->
-      Grid.set(:grid, {x, y}, :sand)
-    end)
 
     {:noreply, socket}
+  end
+
+  def handle_event("select-element:" <> element, _params, socket) do
+    {:noreply, assign(socket, element: String.to_existing_atom(element))}
   end
 
   def handle_info({:diffs, diffs}, socket) do
