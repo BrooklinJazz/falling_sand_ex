@@ -1,29 +1,88 @@
 defmodule FallingSand.Grid do
   @type element :: :sand | :stone | :empty
-  @type coordinate :: {x :: integer(), y :: integer()}
-  @type diff :: [{coordinate(), element()}]
-  @type grid :: any()
-  @type cell :: {coordinate(), element()}
-  @type json_safe_cell :: %{x: integer(), y: integer(), element: element()}
-  @callback all_cells(grid()) :: list(json_safe_cell())
-  @callback get(grid(), coordinate()) :: cell()
-  @callback new(opts :: list()) :: grid()
-  @callback set(grid(), {integer(), integer()}, element()) :: any()
-  @callback tick(grid()) :: diff()
+  # @type grid :: any()
+  # @type coordinate :: {x :: integer(), y :: integer()}
+  # @callback all_cells(grid()) :: list(json_safe_cell())
+  # @callback get(grid(), coordinate()) :: cell()
+  # @callback new(opts :: list()) :: grid()
+  # @callback set(grid(), {integer(), integer()}, element()) :: any()
+  # @callback tick(grid()) :: diff()
+  @min 0
+  @max Application.compile_env!(:falling_sand, :grid_size)
 
-  @spec impl() :: any()
-  def impl() do
-    # I do this to make swapping to new versions easier, and it lets me benchmark and test new optimized versins against the old verson.
-    FallingSand.Grid.WithBounds
+  @spec all_cells(:ets.table()) :: list()
+  def all_cells(ref) do
+    :ets.match(ref, {{:"$1", :"$2"}, {:_, :"$3"}})
   end
 
-  def all_cells(grid), do: impl().all_cells(grid)
+  @spec tick(:ets.table()) :: list()
+  def tick(ref) do
+    :ets.match(ref, {{:"$1", :"$2"}, {true, :"$3"}})
+    |> Enum.flat_map(fn [y, x, element] ->
+      cond do
+        element == :sand and not :ets.member(ref, {y + 1, x}) ->
+          set(ref, {x, y}, :empty)
+          set(ref, {x, y + 1}, :sand)
+          [[x, y, :empty], [x, y + 1, :sand]]
 
-  def get(grid, coordinates), do: impl().get(grid, coordinates)
+        element == :sand and not :ets.member(ref, {y + 1, x + 1}) ->
+          set(ref, {x, y}, :empty)
+          set(ref, {x + 1, y + 1}, :sand)
+          [[x, y, :empty], [x + 1, y + 1, :sand]]
 
-  @spec new(list()) :: any()
-  def new(opts \\ []), do: impl().new(opts)
+        element == :sand and not :ets.member(ref, {y + 1, x - 1}) ->
+          set(ref, {x, y}, :empty)
+          set(ref, {x - 1, y + 1}, :sand)
+          [[x, y, :empty], [x - 1, y + 1, :sand]]
 
-  def set(grid, coordinates, value), do: impl().set(grid, coordinates, value)
-  def tick(grid), do: impl().tick(grid)
+        element == :sand ->
+          # only set idle if the elements below it are idle.
+          with {_, false} <- :ets.lookup_element(ref, {y + 1, x}, 2),
+               {_, false} <- :ets.lookup_element(ref, {y + 1, x}, 2),
+               {_, false} <- :ets.lookup_element(ref, {y + 1, x}, 2) do
+            :ets.update_element(ref, {y, x}, {2, {false, :sand}})
+            []
+          else
+            _ -> []
+          end
+
+        element == :stone ->
+          :ets.update_element(ref, {y, x}, {2, {false, :stone}})
+          [[x, y, :stone]]
+
+        true ->
+          raise "Unhandled element condition"
+      end
+    end)
+  end
+
+  @spec new(Keyword.t()) :: :ets.table()
+  def new(opts \\ []) do
+    name = Keyword.get(opts, :name)
+    table_options = [:public, :set] ++ if name, do: [:named_table], else: []
+    :ets.new(name, table_options)
+  end
+
+  @spec get(:ets.table(), any()) :: atom()
+  def get(ref, {x, y}) do
+    case :ets.lookup_element(ref, {y, x}, 2, {false, :empty}) do
+      {_, element} -> element
+    end
+  end
+
+  @spec set(:ets.table(), {integer(), integer()}, element()) :: true
+  def set(ref, {x, y}, :empty) do
+    :ets.delete(ref, {y, x})
+  end
+
+  # Storing elements with the row first for bottom-up logic
+  def set(ref, {x, y}, element) do
+    if in_bounds?({x, y}) do
+      :ets.insert(ref, {{y, x}, {true, element}})
+    end
+  end
+
+  defp in_bounds?({x, y}) do
+    y >= @min and y <= @max and x >= @min and x <= @max
+  end
 end

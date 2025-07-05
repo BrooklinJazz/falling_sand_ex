@@ -1,9 +1,8 @@
 defmodule FallingSand.GridTest do
   use ExUnit.Case
-  alias FallingSand.Grid.WithBounds
-  alias FallingSand.Grid.WithDiffTracking
-  alias FallingSand.Grid.WithActiveTracking
   alias FallingSand.Grid
+  @max Application.compile_env!(:falling_sand, :grid_size)
+  @min 0
 
   test "all_cells/1" do
     grid = Grid.new()
@@ -125,14 +124,14 @@ defmodule FallingSand.GridTest do
 
   @tag :skip
   test "tick/1 sand falls beyond edges of grid size" do
-    grid = Grid.new(name: :with_bounds, start: {0, 0}, end: {500, 500})
-    Grid.set(grid, {0, 500}, :sand)
-    Grid.set(grid, {500, 500}, :sand)
+    grid = Grid.new()
+    Grid.set(grid, {@min, @max}, :sand)
+    Grid.set(grid, {@max, @max}, :sand)
     diffs = Grid.tick(grid)
-    assert {{500, 500}, :empty} in diffs
-    assert {{0, 500}, :empty} in diffs
-    assert Grid.get(grid, {0, 501}) == :empty
-    assert Grid.get(grid, {500, 501}) == :empty
+    assert {{@max, @max}, :empty} in diffs
+    assert {{@min, @max}, :empty} in diffs
+    assert Grid.get(grid, {0, @max + 1}) == :empty
+    assert Grid.get(grid, {@max, @max + 1}) == :empty
   end
 
   @tag :skip
@@ -177,108 +176,60 @@ defmodule FallingSand.GridTest do
 
   @tag :benchmark
   @tag timeout: :infinity
-  test "ets vs mapset" do
-    Benchee.run(%{
-      "ets" => fn ->
-        table = :ets.new(:name, [:public, :set])
-
-        Enum.each(1..1000, fn n ->
-          :ets.insert(table, {{n, n}, true})
-          :ets.member(table, {n, n})
-        end)
-      end,
-      "mapset" => fn ->
-        Enum.reduce(1..1000, MapSet.new(), fn n, map_set ->
-          map_set = MapSet.put(map_set, {n, n})
-          MapSet.member?(map_set, {n, n})
-          map_set
-        end)
-      end
-    })
-  end
-
-  @tag :benchmark
-  @tag timeout: :infinity
   test "benchmark tick cycle" do
-    size = 1000
+    size = @max
 
-    # output =
-    Benchee.run(
-      %{
-        "WithActiveTracking.tick/1" => {
-          fn grid ->
-            Enum.each(1..60, fn _ ->
-              WithActiveTracking.tick(grid)
-            end)
-          end,
-          before_scenario: fn coordinates ->
-            grid = WithActiveTracking.new()
+    Benchee.report(load: "bench/grid.benchee")
 
-            Enum.each(coordinates, fn {coord, element} ->
-              WithActiveTracking.set(grid, coord, element)
-            end)
+    output =
+      Benchee.run(
+        %{
+          "Grid.tick/1" => {
+            fn grid ->
+              Enum.each(1..60, fn _ ->
+                Grid.tick(grid)
+              end)
+            end,
+            before_scenario: fn coordinates ->
+              grid = Grid.new()
 
-            grid
-          end
+              Enum.each(coordinates, fn {coord, element} ->
+                Grid.set(grid, coord, element)
+              end)
+
+              grid
+            end,
+            after_scenario: fn grid ->
+              :ets.delete(grid)
+            end
+          }
         },
-        "WithDiffTracking.tick/1" => {
-          fn grid ->
-            Enum.each(1..60, fn _ ->
-              WithDiffTracking.tick(grid)
+        time: 2,
+        memory_time: 1,
+        save: [path: "bench/grid.benchee"],
+        load: "bench/grid*.benchee",
+        inputs: %{
+          "Sand Particles Fall then Idle" =>
+            Enum.flat_map(1..size, fn n ->
+              [{{n, 0}, :sand}, {{n, 2}, :stone}, {{n - 1, 2}, :stone}, {{n + 1, 2}, :stone}]
             end)
-          end,
-          before_scenario: fn coordinates ->
-            grid = WithDiffTracking.new()
-
-            Enum.each(coordinates, fn {coord, element} ->
-              WithDiffTracking.set(grid, coord, element)
-            end)
-
-            grid
-          end
-        },
-        "WithBounds.tick/1" => {
-          fn grid ->
-            Enum.each(1..60, fn _ ->
-              WithBounds.tick(grid)
-            end)
-          end,
-          before_scenario: fn coordinates ->
-            grid = WithBounds.new()
-
-            Enum.each(coordinates, fn {coord, element} ->
-              WithBounds.set(grid, coord, element)
-            end)
-
-            grid
-          end
+            |> Enum.uniq(),
+          "Horizonal" => Enum.map(1..size, fn n -> {{n, 0}, :sand} end),
+          "Vertical" => Enum.map(1..size, fn n -> {{0, n}, :sand} end),
+          "Spaced Vertical" => Enum.map(1..(size * 2)//2, fn n -> {{0, n}, :sand} end),
+          "Diagonal Left" =>
+            Enum.flat_map(1..size, fn n -> [{{n, n}, :sand}, {{n + 1, n + 1}, :stone}] end),
+          "Diagonal Right" =>
+            Enum.flat_map(1..size, fn n -> [{{-n, n}, :sand}, {{-n + 1, n + 1}, :stone}] end)
         }
-      },
-      time: 2,
-      memory_time: 1,
-      save: [path: "bench/optimized_with_diff.exs"],
-      inputs: %{
-        "Horizonal Particles" => Enum.map(1..size, fn n -> {{n, 0}, :sand} end),
-        "Sand Particles Fall then Idle" =>
-          Enum.flat_map(1..size, fn n ->
-            [{{n, 0}, :sand}, {{n, 2}, :stone}, {{n - 1, 2}, :stone}, {{n + 1, 2}, :stone}]
-          end)
-          |> Enum.uniq(),
-        "Vertical" => Enum.map(1..size, fn n -> {{0, n}, :sand} end),
-        "Spaced Vertical" => Enum.map(1..(size * 2)//2, fn n -> {{0, n}, :sand} end),
-        "Diagonal Left" =>
-          Enum.flat_map(1..size, fn n -> [{{n, n}, :sand}, {{n + 1, n + 1}, :stone}] end),
-        "Diagonal Right" =>
-          Enum.flat_map(1..size, fn n -> [{{-n, n}, :sand}, {{-n + 1, n + 1}, :stone}] end)
-      }
-    )
+      )
 
-    # one_second = 1_000_000_000
+    one_second = 1_000_000_000
 
-    # grid_results = Enum.at(output.scenarios, 0)
+    grid_results = Enum.at(output.scenarios, 0)
 
     # # Should be able to simulate 50K particles at 60 frames in under one second.
-    # assert grid_results.run_time_data.statistics.average <= one_second
+    assert grid_results.run_time_data.statistics.average <= one_second
   end
 
   @tag :benchmark

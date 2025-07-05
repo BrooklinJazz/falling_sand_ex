@@ -1,9 +1,8 @@
 defmodule FallingSand.GridServer do
-  alias FallingSand.Cursors
   alias FallingSand.Grid
   use GenServer
 
-  @tick_interval Application.compile_env(:falling_sand, :tick_interval)
+  @tick_interval Application.compile_env!(:falling_sand, :tick_interval)
   @pubsub_topic "grid"
 
   def start_link(opts) do
@@ -58,7 +57,6 @@ defmodule FallingSand.GridServer do
     Phoenix.PubSub.broadcast(
       FallingSand.PubSub,
       @pubsub_topic,
-      # eventually I should optimize tick to return this structure
       {:diffs, diffs}
     )
   end

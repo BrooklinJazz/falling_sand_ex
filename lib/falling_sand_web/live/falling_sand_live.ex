@@ -2,8 +2,8 @@ defmodule FallingSandWeb.FallingSandLive do
   alias FallingSand.Grid
   alias FallingSand.GridServer
   use FallingSandWeb, :live_view
-  @size Application.compile_env(:falling_sand, :grid_size)
-  @cell_size Application.compile_env(:falling_sand, :cell_size)
+  @size Application.compile_env!(:falling_sand, :grid_size)
+  @cell_size Application.compile_env!(:falling_sand, :cell_size)
 
   def mount(_params, _session, socket) do
     height = @size

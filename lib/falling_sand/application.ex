@@ -2,15 +2,13 @@ defmodule FallingSand.Application do
   # See https://hexdocs.pm/elixir/Application.html
   # for more information on OTP Applications
   @moduledoc false
-  @size Application.compile_env(:falling_sand, :size)
   alias FallingSand.Grid
 
   use Application
 
   @impl true
   def start(_type, _args) do
-    grid =
-      Grid.new(name: :grid, min: 0, max: Application.get_env(:falling_sand, :grid_size))
+    grid = Grid.new(name: :grid)
 
     children =
       [
