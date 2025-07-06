@@ -8,7 +8,7 @@ defmodule FallingSand.Application do
 
   @impl true
   def start(_type, _args) do
-    grid = Grid.new(name: :grid)
+    grid = Grid.new(name: Grid)
 
     children =
       [
@@ -24,7 +24,9 @@ defmodule FallingSand.Application do
         FallingSandWeb.Endpoint
       ] ++
         if Mix.env() == :test,
-          do: [],
+          do: [
+            {FallingSand.Tracker, [name: FallingSand.Tracker, pubsub_server: FallingSand.PubSub]}
+          ],
           else: [{FallingSand.GridServer, [grid: grid, name: FallingSand.GridServer]}]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

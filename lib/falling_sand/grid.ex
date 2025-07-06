@@ -12,11 +12,11 @@ defmodule FallingSand.Grid do
 
   @spec all_cells(:ets.table()) :: list()
   def all_cells(ref) do
-    :ets.match(ref, {{:"$1", :"$2"}, {:_, :"$3"}})
+    :ets.match(ref, {{:"$2", :"$1"}, {:_, :"$3"}})
   end
 
   @spec tick(:ets.table()) :: list()
-  def tick(ref) do
+  def tick(ref \\ __MODULE__) do
     :ets.match(ref, {{:"$1", :"$2"}, {true, :"$3"}})
     |> Enum.flat_map(fn [y, x, element] ->
       cond do

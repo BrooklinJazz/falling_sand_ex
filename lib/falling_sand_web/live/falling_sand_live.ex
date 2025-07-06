@@ -3,6 +3,7 @@ defmodule FallingSandWeb.FallingSandLive do
   alias FallingSand.GridServer
   use FallingSandWeb, :live_view
   @size Application.compile_env!(:falling_sand, :grid_size)
+  @draw_radius Application.compile_env!(:falling_sand, :draw_radius)
   @cell_size Application.compile_env!(:falling_sand, :cell_size)
 
   def mount(_params, _session, socket) do
@@ -15,7 +16,7 @@ defmodule FallingSandWeb.FallingSandLive do
       Phoenix.PubSub.subscribe(FallingSand.PubSub, "grid")
     end
 
-    socket = push_event(socket, "render_grid", %{diffs: GridServer.all_cells()})
+    socket = push_event(socket, "render_grid", %{diffs: Grid.all_cells(Grid)})
 
     {:ok,
      assign(socket,
@@ -51,9 +52,9 @@ defmodule FallingSandWeb.FallingSandLive do
   end
 
   def handle_event("set", %{"x" => x, "y" => y}, socket) do
-    Grid.set(:grid, {x, y}, socket.assigns.element)
+    Grid.set(Grid, {x, y}, socket.assigns.element)
 
-    r = 2
+    r = @draw_radius
 
     case socket.assigns.element do
       :sand ->
@@ -63,13 +64,13 @@ defmodule FallingSandWeb.FallingSandLive do
         # |> Enum.shuffle()
         # |> Enum.take(5)
         |> Enum.each(fn {x, y} ->
-          Grid.set(:grid, {x, y}, :sand)
+          Grid.set(Grid, {x, y}, :sand)
         end)
 
       :stone ->
         for xr <- (x - r)..(x + r), yr <- (y - r)..(y + r) do
           {xr, yr}
-          Grid.set(:grid, {xr, yr}, :stone)
+          Grid.set(Grid, {xr, yr}, :stone)
         end
     end
 

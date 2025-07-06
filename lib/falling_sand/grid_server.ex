@@ -8,15 +8,13 @@ defmodule FallingSand.GridServer do
   def start_link(opts) do
     tick = Keyword.get(opts, :tick, @tick_interval)
     name = Keyword.get(opts, :name)
-    cursors = Keyword.get(opts, :cursors, :cursors)
-    grid = Keyword.get(opts, :grid) || Grid.new()
-    GenServer.start_link(__MODULE__, [tick: tick, grid: grid, cursors: cursors], name: name)
+    grid = Keyword.fetch!(opts, :grid)
+    GenServer.start_link(__MODULE__, [tick: tick, grid: grid], name: name)
   end
 
   def init(opts) do
     tick = Keyword.get(opts, :tick)
     grid = Keyword.get(opts, :grid)
-    cursors = Keyword.get(opts, :cursors)
 
     if tick do
       Process.send_after(self(), :tick, tick)
@@ -24,22 +22,17 @@ defmodule FallingSand.GridServer do
 
     {:ok,
      %{
-       cursors: cursors,
        grid: grid,
        tick: tick
      }}
   end
 
-  def all_cells() do
-    GenServer.call(__MODULE__, :all_cells)
-  end
-
-  def handle_call(:all_cells, _from, state) do
-    {:reply, Grid.all_cells(state.grid), state}
-  end
-
   def handle_info(:tick, state) do
+    start = System.monotonic_time(:microsecond)
     diffs = Grid.tick(state.grid)
+    finish = System.monotonic_time(:microsecond)
+    elapsed_us = finish - start
+    IO.puts("Time to run Grid.tick/1: #{elapsed_us / 1_000} ms")
 
     case diffs do
       [] -> nil
@@ -59,5 +52,12 @@ defmodule FallingSand.GridServer do
       @pubsub_topic,
       {:diffs, diffs}
     )
+  end
+
+  @impl true
+  def terminate(_reason, state) do
+    :ets.delete(state.grid)
+
+    :ok
   end
 end

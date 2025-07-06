@@ -23,8 +23,9 @@ config :falling_sand, FallingSandWeb.Endpoint,
 
 config :falling_sand,
   grid_size: 100,
-  tick_interval: 10,
-  cell_size: 4
+  tick_interval: 15,
+  cell_size: 3,
+  draw_radius: 2
 
 # Configures the mailer
 #

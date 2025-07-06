@@ -6,8 +6,8 @@ defmodule FallingSand.GridTest do
 
   test "all_cells/1" do
     grid = Grid.new()
-    Grid.set(grid, {0, 0}, :sand)
-    assert [[0, 0, :sand]] = Grid.all_cells(grid)
+    Grid.set(grid, {0, 1}, :sand)
+    assert [[0, 1, :sand]] = Grid.all_cells(grid)
   end
 
   test "get/2" do
