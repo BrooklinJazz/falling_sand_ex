@@ -15,51 +15,70 @@ defmodule FallingSand.Grid do
     :ets.match(ref, {{:"$2", :"$1"}, {:_, :"$3"}})
   end
 
+  def diffs(ref, tick_count) do
+    :ets.lookup_element(ref, tick_count, 2)
+  end
+
+  def diffs_since(ref, since_tick) do
+    :ets.select(ref, [
+      {
+        {:"$1", :"$2"},
+        [{:is_integer, :"$1"}, {:>=, :"$1", since_tick}],
+        [:"$2"]
+      }
+    ])
+    |> Enum.flat_map(& &1)
+  end
+
   @spec tick(:ets.table()) :: list()
-  def tick(ref \\ __MODULE__) do
-    :ets.match(ref, {{:"$1", :"$2"}, {true, :"$3"}})
-    |> Enum.flat_map(fn [y, x, element] ->
-      cond do
-        element == :sand and not :ets.member(ref, {y + 1, x}) ->
-          set(ref, {x, y}, :empty)
-          set(ref, {x, y + 1}, :sand)
-          [[x, y, :empty], [x, y + 1, :sand]]
+  def tick(ref \\ __MODULE__, tick_number \\ 0) do
+    diffs =
+      :ets.match(ref, {{:"$1", :"$2"}, {true, :"$3"}})
+      |> Enum.flat_map(fn [y, x, element] ->
+        cond do
+          element == :sand and not :ets.member(ref, {y + 1, x}) ->
+            set(ref, {x, y}, :empty)
+            set(ref, {x, y + 1}, :sand)
+            [[x, y, :empty], [x, y + 1, :sand]]
 
-        element == :sand and not :ets.member(ref, {y + 1, x + 1}) ->
-          set(ref, {x, y}, :empty)
-          set(ref, {x + 1, y + 1}, :sand)
-          [[x, y, :empty], [x + 1, y + 1, :sand]]
+          element == :sand and not :ets.member(ref, {y + 1, x + 1}) ->
+            set(ref, {x, y}, :empty)
+            set(ref, {x + 1, y + 1}, :sand)
+            [[x, y, :empty], [x + 1, y + 1, :sand]]
 
-        element == :sand and not :ets.member(ref, {y + 1, x - 1}) ->
-          set(ref, {x, y}, :empty)
-          set(ref, {x - 1, y + 1}, :sand)
-          [[x, y, :empty], [x - 1, y + 1, :sand]]
+          element == :sand and not :ets.member(ref, {y + 1, x - 1}) ->
+            set(ref, {x, y}, :empty)
+            set(ref, {x - 1, y + 1}, :sand)
+            [[x, y, :empty], [x - 1, y + 1, :sand]]
 
-        element == :sand ->
-          # only set idle if the elements below it are idle.
-          with {_, false} <- :ets.lookup_element(ref, {y + 1, x}, 2),
-               {_, false} <- :ets.lookup_element(ref, {y + 1, x}, 2),
-               {_, false} <- :ets.lookup_element(ref, {y + 1, x}, 2) do
-            :ets.update_element(ref, {y, x}, {2, {false, :sand}})
-            []
-          else
-            _ -> []
-          end
+          element == :sand ->
+            # only set idle if the elements below it are idle.
+            with {_, false} <- :ets.lookup_element(ref, {y + 1, x}, 2),
+                 {_, false} <- :ets.lookup_element(ref, {y + 1, x}, 2),
+                 {_, false} <- :ets.lookup_element(ref, {y + 1, x}, 2) do
+              :ets.update_element(ref, {y, x}, {2, {false, :sand}})
+              []
+            else
+              _ -> []
+            end
 
-        element == :stone ->
-          :ets.update_element(ref, {y, x}, {2, {false, :stone}})
-          [[x, y, :stone]]
+          element == :stone ->
+            :ets.update_element(ref, {y, x}, {2, {false, :stone}})
+            [[x, y, :stone]]
 
-        true ->
-          raise "Unhandled element condition"
-      end
-    end)
+          true ->
+            raise "Unhandled element condition"
+        end
+      end)
+
+    :ets.insert(ref, {tick_number, diffs})
+    diffs
   end
 
   @spec new(Keyword.t()) :: :ets.table()
   def new(opts \\ []) do
     name = Keyword.get(opts, :name)
-    table_options = [:public, :set] ++ if name, do: [:named_table], else: []
+    table_options = [:public, :ordered_set] ++ if name, do: [:named_table], else: []
     :ets.new(name, table_options)
   end
 

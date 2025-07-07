@@ -27,7 +27,7 @@ defmodule FallingSand.Application do
           do: [
             {FallingSand.Tracker, [name: FallingSand.Tracker, pubsub_server: FallingSand.PubSub]}
           ],
-          else: [{FallingSand.GridServer, [grid: grid, name: FallingSand.GridServer]}]
+          else: [{FallingSand.TickServer, [grid: grid, name: FallingSand.TickServer]}]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options

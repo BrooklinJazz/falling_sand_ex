@@ -15,6 +15,11 @@ Hooks.PixelCanvas = {
         this.handleEvent("render_grid", ({ diffs }) => {
             this.render(diffs)
         })
+
+        this.handleEvent("re-render", ({ all_cells }) => {
+            this.reRender(all_cells)
+        })
+
         this.interval = setInterval(() => {
             if (this.isMouseDown) {
                 this.pushEvent("set", { x: this.x, y: this.y })
@@ -67,6 +72,23 @@ Hooks.PixelCanvas = {
                     break;
                 case "empty":
                     this.ctx.clearRect(x * this.cellSize, y * this.cellSize, this.cellSize, this.cellSize)
+                    break;
+                default:
+            }
+        })
+    },
+    reRender(all_cells) {
+        this.ctx.clearRect(0, 0, this.canvas.height, this.canvas.width)
+
+        all_cells.forEach(([x, y, element]) => {
+            switch (element) {
+                case "sand":
+                    this.ctx.fillStyle = "orange"
+                    this.ctx.fillRect(x * this.cellSize, y * this.cellSize, this.cellSize, this.cellSize)
+                    break;
+                case "stone":
+                    this.ctx.fillStyle = "black"
+                    this.ctx.fillRect(x * this.cellSize, y * this.cellSize, this.cellSize, this.cellSize)
                     break;
                 default:
             }

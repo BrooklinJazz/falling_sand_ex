@@ -22,10 +22,10 @@ config :falling_sand, FallingSandWeb.Endpoint,
   live_view: [signing_salt: "jfii5M1+"]
 
 config :falling_sand,
-  grid_size: 100,
+  grid_size: 1024,
   tick_interval: 15,
-  cell_size: 3,
-  draw_radius: 2
+  cell_size: 1,
+  draw_radius: 10
 
 # Configures the mailer
 #

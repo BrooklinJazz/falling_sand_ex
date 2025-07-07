@@ -35,3 +35,11 @@ Ready to run in production? Please [check our deployment guides](https://hexdocs
 * Pretty Cursor
 * Refactor and Optimize Grid
 * Paint other player cursors
+
+## Optmization
+The broadcasting of many messages from the GenServer introduces a massive delay and overhead.
+The Tick takes only 5ms or so, but the broadcast can take upwards of 300ms or more.
+
+Options:
+* Instead of a Broadcast, have LiveViews read directly from the ets grid
+* 

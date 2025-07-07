@@ -13,10 +13,11 @@ defmodule FallingSandWeb.FallingSandLive do
     page_id = UUID.uuid1()
 
     if connected?(socket) do
+      Process.send_after(self(), :tick, 15)
       Phoenix.PubSub.subscribe(FallingSand.PubSub, "grid")
     end
 
-    socket = push_event(socket, "render_grid", %{diffs: Grid.all_cells(Grid)})
+    socket = push_event(socket, "re-render", %{all_cells: Grid.all_cells(Grid)})
 
     {:ok,
      assign(socket,
@@ -81,7 +82,13 @@ defmodule FallingSandWeb.FallingSandLive do
     {:noreply, assign(socket, element: String.to_existing_atom(element))}
   end
 
-  def handle_info({:diffs, diffs}, socket) do
-    {:noreply, push_event(socket, "render_grid", %{diffs: diffs})}
+  # def handle_info({:diffs, diffs}, socket) do
+  #   {:noreply, push_event(socket, "re-render", %{all_: diffs})}
+  # end
+
+  def handle_info(:tick, socket) do
+    Process.send_after(self(), :tick, 15)
+    all_cells = Grid.all_cells(Grid)
+    {:noreply, push_event(socket, "re-render", %{all_cells: all_cells})}
   end
 end

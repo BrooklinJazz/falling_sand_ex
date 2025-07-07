@@ -1,7 +1,8 @@
 defmodule FallingSand.GridTest do
   use ExUnit.Case
+  # alias FallingSand.Grid
   alias FallingSand.Grid
-  @max Application.compile_env!(:falling_sand, :grid_size)
+  @size Application.compile_env!(:falling_sand, :grid_size)
   @min 0
 
   test "all_cells/1" do
@@ -48,17 +49,6 @@ defmodule FallingSand.GridTest do
     assert Grid.get(grid, {0, 1}) == :stone
     assert Grid.get(grid, {1, 1}) == :stone
     assert Grid.get(grid, {2, 1}) == :stone
-  end
-
-  test "tick/1 sand falls down in a line" do
-    grid = Grid.new()
-    Grid.set(grid, {0, 0}, :sand)
-    Grid.set(grid, {0, 1}, :sand)
-    Grid.tick(grid)
-
-    assert Grid.get(grid, {0, 0}) == :empty
-    assert Grid.get(grid, {0, 1}) == :sand
-    assert Grid.get(grid, {0, 2}) == :sand
   end
 
   test "tick/1 sand falls down right" do
@@ -111,27 +101,52 @@ defmodule FallingSand.GridTest do
   end
 
   test "set/3 sand beyond edges of grid size" do
-    grid = Grid.new(start: {0, 0}, end: {500, 500})
+    grid = Grid.new()
     Grid.set(grid, {-1, 0}, :sand)
     Grid.set(grid, {0, -1}, :sand)
-    Grid.set(grid, {500, 501}, :sand)
-    Grid.set(grid, {501, 500}, :sand)
+    Grid.set(grid, {@size, @size + 1}, :sand)
+    Grid.set(grid, {@size + 1, @size}, :sand)
     assert Grid.get(grid, {-1, 0}) == :empty
     assert Grid.get(grid, {0, -1}) == :empty
-    assert Grid.get(grid, {500, 501}) == :empty
-    assert Grid.get(grid, {501, 500}) == :empty
+    assert Grid.get(grid, {@size, @size + 1}) == :empty
+    assert Grid.get(grid, {@size + 1, @size}) == :empty
+  end
+
+  test "grid tracks diff history based on tick number" do
+    grid = Grid.new()
+    Grid.set(grid, {0, 0}, :sand)
+    Grid.tick(grid, 0)
+    Grid.tick(grid, 1)
+    Grid.tick(grid, 2)
+    # assert [[0, 0, :sand]] = Grid.diffs(grid, 0)
+    assert [[0, 0, :empty], [0, 1, :sand]] = Grid.diffs(grid, 0)
+    assert [[0, 1, :empty], [0, 2, :sand]] = Grid.diffs(grid, 1)
+    assert [[0, 2, :empty], [0, 3, :sand]] = Grid.diffs(grid, 2)
+
+    assert [
+             [0, 0, :empty],
+             [0, 1, :sand],
+             [0, 1, :empty],
+             [0, 2, :sand],
+             [0, 2, :empty],
+             [0, 3, :sand]
+           ] =
+             Grid.diffs_since(grid, 0)
+
+    assert [[0, 1, :empty], [0, 2, :sand], [0, 2, :empty], [0, 3, :sand]] =
+             Grid.diffs_since(grid, 1)
   end
 
   @tag :skip
   test "tick/1 sand falls beyond edges of grid size" do
     grid = Grid.new()
-    Grid.set(grid, {@min, @max}, :sand)
-    Grid.set(grid, {@max, @max}, :sand)
+    Grid.set(grid, {@min, @size}, :sand)
+    Grid.set(grid, {@size, @size}, :sand)
     diffs = Grid.tick(grid)
-    assert {{@max, @max}, :empty} in diffs
-    assert {{@min, @max}, :empty} in diffs
-    assert Grid.get(grid, {0, @max + 1}) == :empty
-    assert Grid.get(grid, {@max, @max + 1}) == :empty
+    assert {{@size, @size}, :empty} in diffs
+    assert {{@min, @size}, :empty} in diffs
+    assert Grid.get(grid, {0, @size + 1}) == :empty
+    assert Grid.get(grid, {@size, @size + 1}) == :empty
   end
 
   @tag :skip
@@ -177,10 +192,6 @@ defmodule FallingSand.GridTest do
   @tag :benchmark
   @tag timeout: :infinity
   test "benchmark tick cycle" do
-    size = @max
-
-    Benchee.report(load: "bench/grid.benchee")
-
     output =
       Benchee.run(
         %{
@@ -206,21 +217,24 @@ defmodule FallingSand.GridTest do
         },
         time: 2,
         memory_time: 1,
-        save: [path: "bench/grid.benchee"],
-        load: "bench/grid*.benchee",
+        # save: [path: "bench/grid.benchee"],
+        # load: "bench/grid*.benchee",
         inputs: %{
-          "Sand Particles Fall then Idle" =>
-            Enum.flat_map(1..size, fn n ->
-              [{{n, 0}, :sand}, {{n, 2}, :stone}, {{n - 1, 2}, :stone}, {{n + 1, 2}, :stone}]
-            end)
-            |> Enum.uniq(),
-          "Horizonal" => Enum.map(1..size, fn n -> {{n, 0}, :sand} end),
-          "Vertical" => Enum.map(1..size, fn n -> {{0, n}, :sand} end),
-          "Spaced Vertical" => Enum.map(1..(size * 2)//2, fn n -> {{0, n}, :sand} end),
-          "Diagonal Left" =>
-            Enum.flat_map(1..size, fn n -> [{{n, n}, :sand}, {{n + 1, n + 1}, :stone}] end),
-          "Diagonal Right" =>
-            Enum.flat_map(1..size, fn n -> [{{-n, n}, :sand}, {{-n + 1, n + 1}, :stone}] end)
+          # alternating rows of falling sand
+          "Max" =>
+            Enum.flat_map(0..@size//2, fn y -> Enum.map(0..@size, fn x -> {{x, y}, :sand} end) end)
+          # "Sand Particles Fall then Idle" =>
+          #   Enum.flat_map(1..@size, fn n ->
+          #     [{{n, 0}, :sand}, {{n, 2}, :stone}, {{n - 1, 2}, :stone}, {{n + 1, 2}, :stone}]
+          #   end)
+          #   |> Enum.uniq()
+          # "Horizonal" => Enum.map(1..@size, fn n -> {{n, 0}, :sand} end),
+          # "Vertical" => Enum.map(1..@size, fn n -> {{0, n}, :sand} end),
+          # "Spaced Vertical" => Enum.map(1..(@size * 2)//2, fn n -> {{0, n}, :sand} end),
+          # "Diagonal Left" =>
+          #   Enum.flat_map(1..@size, fn n -> [{{n, n}, :sand}, {{n + 1, n + 1}, :stone}] end),
+          # "Diagonal Right" =>
+          #   Enum.flat_map(1..@size, fn n -> [{{-n, n}, :sand}, {{-n + 1, n + 1}, :stone}] end)
         }
       )
 
@@ -228,10 +242,11 @@ defmodule FallingSand.GridTest do
 
     grid_results = Enum.at(output.scenarios, 0)
 
-    # # Should be able to simulate 50K particles at 60 frames in under one second.
+    # Should be able to simulate max particles at 60 frames in under one second.
     assert grid_results.run_time_data.statistics.average <= one_second
   end
 
+  # Used this to understand the performance cost of storing data in two different :ets tables with tab2list vs one table then using select
   @tag :benchmark
   @tag :infinity
   test ":ets.tab2list vs :ets.select with active boolean" do

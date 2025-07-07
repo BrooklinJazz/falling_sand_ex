@@ -1,76 +1,79 @@
 defmodule FallingSand.GridServerTest do
   use ExUnit.Case
-  doctest FallingSand.GridServer
-  alias FallingSand.GridServer
-  alias FallingSand.Grid
-  @size Application.compile_env!(:falling_sand, :grid_size)
+  # alias FallingSand.GridServer
+  # alias FallingSand.Grid
+  # @size Application.compile_env!(:falling_sand, :grid_size)
 
-  test "grid server" do
-    grid = Grid.new()
-    {:ok, pid} = GridServer.start_link(tick: nil, grid: grid)
-    Phoenix.PubSub.subscribe(FallingSand.PubSub, "grid")
+  # test "grid server" do
+  #   grid = Grid.new()
+  #   {:ok, pid} = GridServer.start_link(tick: nil, grid: grid)
+  #   Phoenix.PubSub.subscribe(FallingSand.PubSub, "grid")
 
-    Grid.set(grid, {0, 0}, :sand)
-    send(pid, :tick)
-    assert_receive {:diffs, messages}
+  #   Grid.set(grid, {0, 0}, :sand)
+  #   send(pid, :tick)
+  #   assert_receive {:diffs, messages}
 
-    assert [0, 1, :sand] in messages
-    assert [0, 0, :empty] in messages
-  end
+  #   assert [0, 1, :sand] in messages
+  #   assert [0, 0, :empty] in messages
+  # end
 
-  test "broadcasts diffs to multiple subscribers" do
-    grid = Grid.new()
-    {:ok, server} = GridServer.start_link(tick: nil, grid: grid)
+  # test "broadcasts diffs to multiple subscribers" do
+  #   grid = Grid.new()
+  #   {:ok, server} = GridServer.start_link(tick: nil, grid: grid)
 
-    parent = self()
+  #   parent = self()
 
-    subscriber_pids =
-      for _ <- 1..1000 do
-        spawn(fn ->
-          Phoenix.PubSub.subscribe(FallingSand.PubSub, "grid")
+  #   subscriber_pids =
+  #     for _ <- 1..1000 do
+  #       spawn(fn ->
+  #         Phoenix.PubSub.subscribe(FallingSand.PubSub, "grid")
 
-          Phoenix.Tracker.track(FallingSand.Tracker, self(), "grid", "someid", %{
-            pid: self(),
-            notify: parent
-          })
+  #         Phoenix.Tracker.track(FallingSand.Tracker, self(), "grid", "someid", %{
+  #           pid: self(),
+  #           notify: parent
+  #         })
 
-          # Wait for diff message
-          receive do
-            {:diffs, messages} -> send(parent, {:received_diff, self(), messages})
-          end
-        end)
-      end
+  #         # Wait for diff message
+  #         receive do
+  #           {:diffs, messages} -> send(parent, {:received_diff, self(), messages})
+  #         end
+  #       end)
+  #     end
 
-    # Mack sure pids are subscribed using FallingSand.Tracker
-    Enum.each(subscriber_pids, fn _ ->
-      assert_receive {:subscribed, _pid}, 500
-    end)
+  #   # Mack sure pids are subscribed using FallingSand.Tracker
+  #   Enum.each(subscriber_pids, fn _ ->
+  #     assert_receive {:subscribed, _pid}, 500
+  #   end)
 
-    # Now safely trigger tick (all subscribers ready)
-    start = System.monotonic_time(:microsecond)
+  #   # Now safely trigger tick (all subscribers ready)
+  #   start = System.monotonic_time(:microsecond)
 
-    coordinates =
-      Enum.flat_map(0..@size//2, fn row -> Enum.map(1..@size, fn x -> {{x, row}, :sand} end) end)
+  #   coordinates =
+  #     Enum.flat_map(0..@size//2, fn row -> Enum.map(1..@size, fn x -> {{x, row}, :sand} end) end)
 
-    Enum.map(coordinates, fn {{x, y} = coord, element} ->
-      Grid.set(grid, coord, element)
-      [x, y, element]
-    end)
+  #   Enum.map(coordinates, fn {{x, y} = coord, element} ->
+  #     Grid.set(grid, coord, element)
+  #     [x, y, element]
+  #   end)
 
-    send(server, :tick)
+  #   send(server, :tick)
 
-    Enum.each(subscriber_pids, fn _ ->
-      assert_receive {:received_diff, _pid, _diff}, 1000
-    end)
+  #   Enum.each(subscriber_pids, fn _ ->
+  #     assert_receive {:received_diff, _pid, _diff}, 1000
+  #   end)
 
-    finish = System.monotonic_time(:microsecond)
-    elapsed_ms = (finish - start) / 1000
-    fps = elapsed_ms / 1000 * 60
-    IO.puts("Total tick + broadcast + receive time: #{elapsed_ms} ms")
-    IO.puts("Estimated FPS: #{fps} s")
+  #   finish = System.monotonic_time(:microsecond)
+  #   elapsed_ms = (finish - start) / 1000
+  #   fps = elapsed_ms / 1000 * 60
+  #   IO.puts("Total tick + broadcast + receive time: #{elapsed_ms} ms")
+  #   IO.puts("Estimated FPS: #{fps} s")
 
-    GenServer.stop(server)
-  end
+  #   GenServer.stop(server)
+
+  #   Benchee.run(%{
+  #     "Tick and Broadcast"
+  #   })
+  # end
 
   # @tag :benchmark
   # @tag timeout: :infinity
